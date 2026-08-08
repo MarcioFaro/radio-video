@@ -170,15 +170,15 @@ Eventos realtime (canal por `room_id`): `track_added`, `track_removed`, `queue_r
 
 ### Fase 2 — Extração funcionando (CRÍTICO, 2–3 dias)
 > Desenvolvimento local (sem depender da VM ainda).
-- [ ] `extractor/`: FastAPI + uvicorn; venv com `yt-dlp` e `bgutil-ytdlp-pot-provider`
-- [ ] Validar no CLI: `yt-dlp -f "ba*" --extractor-args "youtube:player_client=ios,tv" <url>` com PoToken ativo
-- [ ] Validar **extração de áudio e vídeo**: itag 140 (m4a) / 251 (opus) p/ áudio; 137/299 p/ vídeo
-- [ ] Endpoint `POST /extract {url}` → valida ID do YouTube → resolve → retorna `{id, titulo, duracao_seg, thumbnail_url, audio_url, video_url}`
-- [ ] Cache curto em memória por video_id (TTL 10 min) — URLs expiram
-- [ ] Tratamento de erros estruturado: vídeo privado, bloqueio regional, age-gate, "Sign in to confirm you're not a bot", 429
-- [ ] **Fallback Piped API** quando yt-dlp falhar
-- [ ] Teste de fumaça: 20 vídeos variados, medir latência (1ª resolução ~3–8s, seguintes rápidas) e taxa de sucesso (>80%)
-- **Gate:** extração estável ≥ 80% antes de seguir.
+- [x] `extractor/`: FastAPI + uvicorn; venv com `yt-dlp` e `bgutil-ytdlp-pot-provider`
+- [x] Validar no CLI: `yt-dlp -f "ba*" --extractor-args "youtube:player_client=ios,tv" <url>` com PoToken ativo — **obs.: clientes `web`/`web_embedded` retornam formats DRM-only e quebram a seleção; usar cliente padrão (android_vr) ou `tv_embedded` + PoToken**
+- [x] Validar **extração de áudio e vídeo**: itag 140 (m4a) / 251 (opus) p/ áudio; 137/299 p/ vídeo (ok também 313/2160p)
+- [x] Endpoint `POST /extract {url}` → valida ID do YouTube → resolve → retorna `{id, titulo, duracao_seg, thumbnail_url, audio_url, video_url}`
+- [x] Cache curto em memória por video_id (TTL 10 min) — URLs expiram
+- [x] Tratamento de erros estruturado: vídeo privado, bloqueio regional, age-gate, "Sign in to confirm you're not a bot", 429
+- [x] **Fallback Piped API** quando yt-dlp falhar
+- [x] Teste de fumaça: 20 vídeos variados, medir latência (1ª resolução ~3–8s, seguintes rápidas) e taxa de sucesso (>80%)
+- **Gate:** extração estável ≥ 80% antes de seguir. ✅ **APROVADO** — 18/20 = 90% (média 1.3s), `extractor/smoke_test.py` reproduzível via `docker exec radio-extractor python smoke_test.py`
 
 ### Fase 3 — Backend API + infraestrutura (5–7 dias)
 > Absorve a infraestrutura da antiga Fase 0 (VM, domínio, nginx) que não era necessária antes desta fase.

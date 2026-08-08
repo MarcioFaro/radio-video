@@ -1,4 +1,4 @@
-# Documentação de Telas (Fase 1 - Protótipo Funcional)
+# Documentação de Telas (Fase 1 - Protótipo Funcional, revisado na Fase 2 - Extrator Real)
 
 Este documento descreve as telas e os estados criados na Fase 1 do projeto (Protótipo Funcional). Revisado ao fechar as pendências da Fase 1 (camada de dados isolada, PWA shell, `/join`).
 
@@ -29,7 +29,10 @@ Este documento descreve as telas e os estados criados na Fase 1 do projeto (Prot
 
 ## 4. Modal Adicionar Música
 - **O que faz:** Busca uma música por link do YouTube.
-- **Máscara Funcional:** `data/queue.ts:previewTrack(url)` chama o **extrator real** (`POST http://127.0.0.1:8000/extract`, via Docker) e, se ele estiver fora ou falhar, cai para um preview fake após um pequeno delay de loading. Confirmar adiciona na fila para ver como a UI reage. *(Integração completa com o backend real reconecta na Fase 4.)*
+- **Máscara Funcional (revisada na Fase 2 — extrator real):** `data/queue.ts:previewTrack(url)` chama o **extrator real** (`POST http://127.0.0.1:8000/extract`, via Docker). O extrator resolve o vídeo com yt-dlp + PoToken (servidor bgutil na porta 4416) e retorna `audio_url`, `thumbnail_url`, `duracao_seg` e `video_url` (formato de vídeo, usado no futuro). 
+  - **Erros estruturados:** se o vídeo não puder ser extraído, o extrator responde `422` com `{error: {code, message}}` e o app mostra a mensagem traduzida em português no modal (ex.: "Vídeo removido ou indisponível.", "Vídeo com restrição de idade.", "Limite de requisições ao YouTube atingido..."). Sem fallback silencioso para preview fake nesses casos.
+  - **Demo fallback:** só quando o container do extrator está fora do ar (fetch falha/aborta), o app cai para um preview fake após um pequeno delay de loading. O próprio extrator também pode retornar `fallback: true` (título "Faixa de Demonstração (Extração Bloqueada)") quando nenhuma fonte (yt-dlp/Piped) resolveu o stream — fica explícito na fila que é demonstração.
+  - **Fila:** confirmar adiciona `audio_url` real; o player toca o áudio real do YouTube (stream .webm/opus direto do CDN do Google).
 
 ## 5. Entrada por convite (`/join?code=`)
 - **O que faz:** Deep link para entrar numa rádio sem passar pela lista.

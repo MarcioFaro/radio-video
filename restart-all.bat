@@ -44,6 +44,11 @@ echo.
 REM ============================================================
 REM  2) Extractor (build + restart via Docker)
 REM ============================================================
+echo [2/4] Extractor - servidor POT (PoToken) na porta 4416...
+docker rm -f bgutil-provider >nul 2>&1
+docker run -d --name bgutil-provider --init -p 4416:4416 brainicism/bgutil-ytdlp-pot-provider
+if errorlevel 1 echo [AVISO] Servidor POT nao subiu. O extractor seguira sem PoToken.
+
 echo [2/4] Extractor - removendo container antigo...
 docker rm -f radio-extractor >nul 2>&1
 
