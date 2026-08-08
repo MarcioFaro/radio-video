@@ -3,6 +3,7 @@ export interface User {
   name: string;
   avatar_url?: string;
   socket_id: string;
+  entrou_em: number;
 }
 
 export interface Track {
@@ -61,4 +62,17 @@ export function getOrCreateRoom(roomId: string, roomName: string, radialistaId: 
     });
   }
   return rooms.get(roomId)!;
+}
+
+// Radialista = membro presente há mais tempo (menor entrou_em)
+export function pickRadialista(room: Room): string | null {
+  let oldestId: string | null = null;
+  let oldestAt = Infinity;
+  for (const user of room.users.values()) {
+    if (user.entrou_em < oldestAt) {
+      oldestAt = user.entrou_em;
+      oldestId = user.id;
+    }
+  }
+  return oldestId;
 }

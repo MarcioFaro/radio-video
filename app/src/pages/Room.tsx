@@ -13,7 +13,7 @@ export default function Room() {
   const localRooms = useRoomsStore(s => s.rooms);
   
   const { 
-    roomName, queue, presence, chat, playback, radialista_id,
+    roomName, queue, presence, chat, playback, radialista_id, connected,
     joinRoom, leaveRoom, setPlaybackStatus, sendMessage, simulateRadialistaChange 
   } = useRoomStore();
   
@@ -87,8 +87,11 @@ export default function Room() {
           </button>
           <div>
             <h1 className="text-lg font-bold text-white">{roomName || 'Sala'}</h1>
-            <p className="text-xs text-[#1db954] flex items-center gap-1">
+            <p className="text-xs text-gray-400 flex items-center gap-1">
               <Users size={12} /> {presence.length} ouvindo agora
+              <span className={connected ? 'text-[#1db954]' : 'text-red-400'}>
+                {'\u2022'} {connected ? 'sincronizado' : 'offline'}
+              </span>
             </p>
           </div>
         </div>

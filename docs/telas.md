@@ -2,7 +2,9 @@
 
 Este documento descreve as telas e os estados criados na Fase 1 do projeto (Protótipo Funcional). Revisado ao fechar as pendências da Fase 1 (camada de dados isolada, PWA shell, `/join`).
 
-> **Camada de dados:** todas as interações passam por `app/src/data/` (`rooms.ts`, `queue.ts`, `playback.ts`, `presence.ts`, `chat.ts`), implementadas com estado em memória (máscara funcional). A assinatura desses módulos é a final — a integração real (Supabase/backend) troca apenas a implementação, sem tocar na UI. O app roda sozinho com `npm run dev` (só Vite), sem precisar da API nem do Docker.
+> **Camada de dados:** todas as interações passam por `app/src/data/` (`rooms.ts`, `queue.ts`, `playback.ts`, `presence.ts`, `chat.ts`), implementadas com estado em memória (máscara funcional). A assinatura desses módulos é a final — a integração real (Supabase/backend) troca apenas a implementação, sem tocar na UI.
+
+> **Realtime demo (revisão pós-Fase 1):** o app ganhou um modo de sincronização real entre navegadores via backend Socket.IO local (`api/`, porta 3005). Ao entrar na sala, se a API estiver no ar, `data/realtime.ts` passa a alimentar fila/chat/presença/playback pelo servidor — 2 abas/navegadores vendo a mesma sala se sincronizam de verdade. Se a API estiver fora, o app cai automaticamente para o fixture em memória (funciona sozinho com `npm run dev`, só Vite). *Isso continua provisório em relação às Fases 5-6 (presença/radialista/sync reais com backend definitivo) — o servidor local é um mock do comportamento final.*
 
 ## 1. Tela de Login (`/`)
 - **O que faz:** Permite o usuário inserir um nome/apelido para entrar no app. Suporta parâmetro `?code=` vindo de `/join` (após entrar, redireciona para a sala do convite).
@@ -18,15 +20,16 @@ Este documento descreve as telas e os estados criados na Fase 1 do projeto (Prot
 ## 3. Sala Principal (`/room/:id`)
 - **O que faz:** Exibe o player, a fila de músicas, a presença dos usuários e o chat.
 - **Máscara Funcional & Estados Provisórios:**
-  - **Presença:** ao entrar, adiciona o usuário atual + 2 ouvintes simulados (Marcos, Pri) em `data/presence.ts`. *(Provisório até integrar presence real na Fase 5.)*
-  - **Radialista:** quem entra primeiro é o radialista. Apenas o radialista pode dar Play/Pause ou Pular. Se o radialista não for você, aparece um banner azul avisando que você é um ouvinte. Há um botão **"Dev: trocar radialista"** no cabeçalho que simula a transferência do papel (para validar a UI dos dois estados). *(Provisório até a lógica real da Fase 5/6.)*
-  - **Fila:** adicionar música (`data/queue.ts`) aparece na fila; a primeira faixa adicionada vira a "atual" do player.
-  - **Chat:** mensagens enviadas aparecem na lista local (`data/chat.ts`). Funciona apenas na mesma aba.
-  - **Player:** toca o áudio da faixa real (URL de demonstração retornada pelo preview fake).
+  - **Presença:** ao entrar, adiciona o usuário atual + 2 ouvintes simulados (Marcos, Pri) em `data/presence.ts`. *(Provisório até integrar presence real na Fase 5.)* Com a API no ar, a presença vem do servidor (entrada/saída refletem de verdade).
+  - **Radialista:** quem entra primeiro é o radialista. Apenas o radialista pode dar Play/Pause ou Pular. Se o radialista não for você, aparece um banner azul avisando que você é um ouvinte. O botão **"Dev: trocar radialista"** no cabeçalho roda a troca via evento `force_radialista` no servidor (ou localmente, se offline) — validando a UI dos dois estados. *(Provisório até a lógica real da Fase 5/6.)*
+  - **Fila:** adicionar música (`data/queue.ts`) aparece na fila; a primeira faixa adicionada vira a "atual" do player. Com a API no ar, a fila sincroniza entre os membros da sala.
+  - **Chat:** mensagens enviadas aparecem na lista local (`data/chat.ts`). Com a API no ar, mensagens sincronizam em tempo real entre os membros.
+  - **Player:** toca o áudio da faixa real (URL de demonstração retornada pelo preview fake, ou a URL real vinda do extrator — ver seção 4).
+  - **Status de conexão:** o cabeçalho mostra um indicador verde "sincronizado" / vermelho "offline" conforme o estado da conexão com a API.
 
 ## 4. Modal Adicionar Música
 - **O que faz:** Busca uma música por link do YouTube.
-- **Máscara Funcional:** Na Fase 1 não há extrator real. `data/queue.ts:previewTrack(url)` retorna um preview fake (título/thumbnail/duração simulados) após um pequeno delay de loading. Confirmar adiciona na fila para ver como a UI reage. *(Extração real reconecta na Fase 4.)*
+- **Máscara Funcional:** `data/queue.ts:previewTrack(url)` chama o **extrator real** (`POST http://127.0.0.1:8000/extract`, via Docker) e, se ele estiver fora ou falhar, cai para um preview fake após um pequeno delay de loading. Confirmar adiciona na fila para ver como a UI reage. *(Integração completa com o backend real reconecta na Fase 4.)*
 
 ## 5. Entrada por convite (`/join?code=`)
 - **O que faz:** Deep link para entrar numa rádio sem passar pela lista.

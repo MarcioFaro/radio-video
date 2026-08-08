@@ -1,6 +1,18 @@
 import type { PlaybackState } from './types';
+import { subscribe, notify } from './pubsub';
 
 const playbackByRoom = new Map<string, PlaybackState>();
+
+const subKey = (roomId: string) => `playback:${roomId}`;
+
+export function applyPlayback(roomId: string, state: PlaybackState): void {
+  playbackByRoom.set(roomId, { ...state });
+  notify(subKey(roomId));
+}
+
+export function subscribePlayback(roomId: string, cb: () => void): () => void {
+  return subscribe(subKey(roomId), cb);
+}
 
 export function getPlayback(roomId: string): PlaybackState {
   if (!playbackByRoom.has(roomId)) {
@@ -16,4 +28,5 @@ export function setPlayback(
   timestamp: number
 ): void {
   playbackByRoom.set(roomId, { status, currentTrackId, timestamp });
+  notify(subKey(roomId));
 }

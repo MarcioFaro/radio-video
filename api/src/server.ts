@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
-import { rooms, getOrCreateRoom, User, Track } from './store';
+import { rooms, getOrCreateRoom, pickRadialista, User, Track } from './store';
 
 const fastify = Fastify({ logger: true });
 
@@ -29,9 +29,14 @@ io.on('connection', (socket) => {
     socket.join(roomId);
 
     const room = getOrCreateRoom(roomId, roomName, user.id);
-    
-    const newUser: User = { ...user, socket_id: socket.id };
+
+    const newUser: User = { ...user, socket_id: socket.id, entrou_em: Date.now() };
     room.users.set(socket.id, newUser);
+
+    // Se a sala estava vazia, quem entrou primeiro é o radialista
+    if (room.users.size === 1) {
+      room.radialista_id = user.id;
+    }
 
     // Send full current state to the joining user
     socket.emit('sync_state', {
@@ -106,14 +111,36 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('force_radialista', (data: { roomId: string }) => {
+    const room = rooms.get(data.roomId);
+    if (!room || room.users.size === 0) return;
+
+    const ids = Array.from(room.users.values()).map((u) => u.id);
+    const currentIndex = ids.indexOf(room.radialista_id);
+    const nextId = ids[(currentIndex + 1) % ids.length];
+    room.radialista_id = nextId;
+
+    io.to(data.roomId).emit('radialista_changed', room.radialista_id);
+  });
+
   socket.on('disconnect', () => {
     const roomId = socket.data.roomId;
     if (roomId) {
       const room = rooms.get(roomId);
       if (room) {
+        const leaving = room.users.get(socket.id);
         room.users.delete(socket.id);
         io.to(roomId).emit('user_left', { socket_id: socket.id, users: Array.from(room.users.values()) });
-        
+
+        // Se o radialista saiu, transfere o papel para o membro mais antigo restante
+        if (leaving && leaving.id === room.radialista_id) {
+          const next = pickRadialista(room);
+          if (next) {
+            room.radialista_id = next;
+            io.to(roomId).emit('radialista_changed', room.radialista_id);
+          }
+        }
+
         // Remove room if empty to save memory
         if (room.users.size === 0) {
           rooms.delete(roomId);
@@ -126,8 +153,8 @@ io.on('connection', (socket) => {
 
 const start = async () => {
   try {
-    await fastify.listen({ port: 3001, host: '0.0.0.0' });
-    console.log(`Backend Realtime rodando na porta 3001`);
+    await fastify.listen({ port: 3005, host: '0.0.0.0' });
+    console.log(`Backend Realtime rodando na porta 3005`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
