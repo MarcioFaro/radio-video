@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Radio Spike</title>
+  <link rel="manifest" href="./manifest.json">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: #121212;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      text-align: center;
+      padding: 20px;
+    }
+    button {
+      background-color: #1db954;
+      color: white;
+      border: none;
+      padding: 15px 32px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 20px 2px;
+      cursor: pointer;
+      border-radius: 50px;
+      font-weight: bold;
+    }
+    .status {
+      margin-top: 20px;
+      color: #aaa;
+    }
+    .instructions {
+      margin-top: 40px;
+      background: #222;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: left;
+      max-width: 400px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Spike: Áudio em Background</h1>
+  
+  <p>Toque no botão para iniciar e depois apague a tela do celular (ou minimize o Chrome).</p>
+
+  <audio id="player" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" preload="metadata"></audio>
+  
+  <button id="playBtn">Tocar Áudio</button>
+  
+  <div class="status" id="status">Aguardando...</div>
+
+  <div class="instructions">
+    <h3>Como testar no Android Chrome:</h3>
+    <ol>
+      <li>Toque nos 3 pontinhos do Chrome > <strong>"Adicionar à tela inicial"</strong>.</li>
+      <li>Abra o app pelo ícone criado na tela de início.</li>
+      <li>Toque em "Tocar Áudio" aqui na página.</li>
+      <li>Apague a tela do celular.</li>
+      <li>A música deve continuar tocando, e você deve ver os controles na tela de bloqueio.</li>
+    </ol>
+  </div>
+
+  <script>
+    // Registro do Service Worker para PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('SW registrado!', reg))
+        .catch(err => console.error('Erro no SW:', err));
+    }
+
+    const player = document.getElementById('player');
+    const playBtn = document.getElementById('playBtn');
+    const status = document.getElementById('status');
+
+    let isPlaying = false;
+
+    playBtn.addEventListener('click', () => {
+      if (isPlaying) {
+        player.pause();
+      } else {
+        player.play().catch(e => {
+          status.innerText = 'Erro ao tocar: ' + e.message;
+        });
+      }
+    });
+
+    player.addEventListener('play', () => {
+      isPlaying = true;
+      playBtn.innerText = 'Pausar Áudio';
+      status.innerText = 'Tocando agora...';
+      updateMediaSession();
+    });
+
+    player.addEventListener('pause', () => {
+      isPlaying = false;
+      playBtn.innerText = 'Tocar Áudio';
+      status.innerText = 'Pausado.';
+    });
+
+    // Configuração do Media Session API (Controles na tela de bloqueio)
+    function updateMediaSession() {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: 'Faixa de Teste',
+          artist: 'Radio Spike',
+          album: 'Testes de PWA',
+          artwork: [
+            { src: 'https://via.placeholder.com/512.png', sizes: '512x512', type: 'image/png' }
+          ]
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => {
+          player.play();
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+          player.pause();
+        });
+        // Simulando skip
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          player.currentTime = 0;
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          player.currentTime += 30; // Avança 30s
+        });
+      }
+    }
+  </script>
+</body>
+</html>
