@@ -20,12 +20,8 @@ services:
     build:
       context: ./api
     restart: unless-stopped
-
     ports:
       - "3005:3005"
-    volumes:
-      - ./api:/app
-      - /app/node_modules
     
   extractor:
     build:
@@ -33,8 +29,6 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
-    volumes:
-      - ./extractor:/app
 
 volumes:
   caddy_data:
