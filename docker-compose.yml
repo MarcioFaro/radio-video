@@ -20,8 +20,7 @@ services:
     build:
       context: ./api
     restart: unless-stopped
-    env_file:
-      - ./api/.env
+
     ports:
       - "3005:3005"
     volumes:
