@@ -214,6 +214,27 @@ export default function Room() {
     };
   }, [showVideo, currentTrack]);
 
+  // Media Session API (Metadata para PiP, Lockscreen, etc.)
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      if (currentTrack) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentTrack.titulo,
+          artist: 'Comuna-Radio',
+          album: roomName || 'Sala',
+          artwork: [
+            { src: currentTrack.thumbnail_url || '/favicon.svg', sizes: '512x512', type: 'image/jpeg' }
+          ]
+        });
+      } else {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: 'Nada tocando',
+          artist: 'Comuna-Radio'
+        });
+      }
+    }
+  }, [currentTrack, roomName]);
+
   if (!user) return <div className="p-8 text-center text-white">Carregando...</div>;
 
   const handleSendChat = (e: React.FormEvent) => {
