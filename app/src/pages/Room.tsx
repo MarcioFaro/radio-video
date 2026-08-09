@@ -56,16 +56,16 @@ export default function Room() {
   const [playerCollapsed, setPlayerCollapsed] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const lastSyncTsRef = useRef<number | null>(null);
   const hideControlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // No modo video, o <video> e' o motor de reproducao. No modo so-audio,
-  // usamos um <audio> dedicado: iOS mantem reproducao em segundo plano de
-  // forma muito mais confiavel em <audio> do que em <video> escondido.
-  const getActiveEl = (): HTMLVideoElement | HTMLAudioElement | null =>
-    showVideo ? videoRef.current : audioRef.current;
+  // Um unico <video> e' sempre o motor de reproducao (mesmo no modo so-audio,
+  // so escondido visualmente) para que o Picture-in-Picture automatico do
+  // navegador (autoPictureInPicture) funcione ao minimizar o app: PiP so
+  // existe em <video>, nao em <audio>, e mante m a reproducao ativa em
+  // segundo plano de forma muito mais confiavel que qualquer truque em JS.
+  const getActiveEl = (): HTMLVideoElement | null => videoRef.current;
 
   const revealControls = () => {
     setShowControls(true);
@@ -249,6 +249,27 @@ export default function Room() {
     };
   }, [showVideo, currentTrack]);
 
+  // Auto-PiP ao minimizar o app: pede ao navegador para entrar em
+  // Picture-in-Picture sozinho quando a aba/app vai para segundo plano,
+  // mantendo audio (e um mini-player nativo do SO) tocando.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (el) {
+      (el as HTMLVideoElement & { autoPictureInPicture?: boolean }).autoPictureInPicture = true;
+    }
+  }, [currentTrack]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      const el = videoRef.current;
+      if (document.hidden && el && !el.paused && document.pictureInPictureElement !== el) {
+        el.requestPictureInPicture().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
   // Media Session API (Metadata para PiP, Lockscreen, etc.)
   useEffect(() => {
     if ('mediaSession' in navigator) {
@@ -376,34 +397,9 @@ export default function Room() {
   };
 
   const handleToggleVideo = () => {
+    // E' o mesmo <video> em ambos os modos (so muda a exibicao via CSS),
+    // entao alternar nao precisa transferir posicao/estado entre elementos.
     const goingToVideo = !showVideo;
-    const fromEl = showVideo ? videoRef.current : audioRef.current;
-    const toEl = goingToVideo ? videoRef.current : audioRef.current;
-    const targetSrc = goingToVideo ? currentTrack?.video_url : currentTrack?.audio_url;
-
-    const wasPlaying = fromEl ? !fromEl.paused : playback.status === 'playing';
-    const currentPos = fromEl ? fromEl.currentTime : time;
-
-    if (fromEl) fromEl.pause();
-
-    if (toEl && targetSrc) {
-      if (toEl.src !== targetSrc) toEl.src = targetSrc;
-      toEl.volume = volume;
-
-      const resume = () => {
-        toEl.currentTime = currentPos;
-        if (wasPlaying) {
-          toEl.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
-        }
-      };
-
-      if (toEl.readyState >= HTMLMediaElement.HAVE_METADATA) {
-        resume();
-      } else {
-        toEl.addEventListener('loadedmetadata', resume, { once: true });
-      }
-    }
-
     setShowVideo(goingToVideo);
     if (!goingToVideo) setPipActive(false);
   };
@@ -628,12 +624,6 @@ export default function Room() {
                   playsInline
                   muted={isMuted}
                   onEnded={handleTrackEnded}
-                />
-                <audio
-                  ref={audioRef}
-                  muted={isMuted}
-                  onEnded={handleTrackEnded}
-                  className="hidden"
                 />
 
                 {!showVideo && (
