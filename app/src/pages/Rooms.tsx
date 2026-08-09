@@ -12,6 +12,7 @@ interface LiveRoom {
   codigo_convite: string;
   usersCount: number;
   radialistaName: string | null;
+  tracksCount?: number;
 }
 
 export default function Rooms() {
@@ -150,7 +151,12 @@ export default function Rooms() {
               >
                 <div className="flex-1">
                   <div className="flex justify-between items-start">
-                    <h3 className="font-bold text-lg text-white group-hover:text-[#1db954] transition-colors pr-4">{room.name}</h3>
+                    <h3 className="font-bold text-lg text-white group-hover:text-[#1db954] transition-colors pr-4 flex items-center gap-2">
+                      {room.name}
+                      <span className="text-[#1db954] text-[13px] px-2 py-0.5 bg-[#1db954]/10 rounded-full font-medium whitespace-nowrap">
+                        {room.tracksCount || 0} {room.tracksCount === 1 ? 'música' : 'músicas'}
+                      </span>
+                    </h3>
                     <div 
                       onClick={(e) => toggleFavorite(e, room.id)}
                       className={`p-1.5 rounded-full hover:bg-white/10 transition-colors ${favorites.includes(room.id) ? 'text-[#1db954]' : 'text-gray-600'}`}

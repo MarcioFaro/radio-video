@@ -83,7 +83,8 @@ fastify.get('/rooms', async (request, reply) => {
       name: r.name,
       codigo_convite: r.codigo_convite,
       usersCount: r.users.size,
-      radialistaName: radialista ? radialista.name : null
+      radialistaName: radialista ? radialista.name : null,
+      tracksCount: r.queue.length
     };
   });
   return { rooms: activeRooms };
