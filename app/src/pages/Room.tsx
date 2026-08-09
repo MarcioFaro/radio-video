@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useRoomStore } from '../store/useRoomStore';
 import { useUserStore } from '../store/useUserStore';
 import { useRoomsStore } from '../store/useRoomsStore';
@@ -24,8 +24,11 @@ function urlBase64ToUint8Array(base64String: string) {
 export default function Room() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useUserStore(s => s.user);
   const localRooms = useRoomsStore(s => s.rooms);
+  const usersCount = location.state?.usersCount || 0;
+  const [previewMode, setPreviewMode] = useState(usersCount > 0);
   
   const { 
     roomName, queue, history, presence, chat, playback, radialista_id, connected,
@@ -134,7 +137,7 @@ export default function Room() {
         el.src = mediaSrc;
       }
       
-      if (playback.status === 'playing') {
+      if (playback.status === 'playing' && !previewMode) {
         if (el.paused) {
           el.play().then(() => setAutoplayBlocked(false)).catch(e => {
             console.log('Autoplay blocked:', e);
@@ -371,19 +374,45 @@ export default function Room() {
   };
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-[#121212]">
+    <div className="flex flex-col h-[100dvh] bg-[#121212] overflow-hidden relative">
+      {/* Banner */}
+      <div className="w-full h-1.5 shrink-0 z-20">
+        <img src="/rodape.png" alt="" className="w-full h-full object-cover" />
+      </div>
+      
+      {/* Preview Overlay */}
+      {previewMode && (
+        <div className="absolute inset-0 z-50 pointer-events-none flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="pointer-events-auto flex flex-col items-center gap-6 bg-[#181818] p-8 rounded-2xl shadow-2xl border border-[#1db954]/20 max-w-sm text-center mx-4">
+            <h2 className="text-2xl font-bold text-white">Pronto para ouvir?</h2>
+            <p className="text-gray-400 text-sm">Você está no modo de pré-visualização. Navegue pela rádio e, quando quiser, confirme a entrada.</p>
+            <button 
+              onClick={() => setPreviewMode(false)}
+              className="bg-[#1db954] text-black font-bold px-12 py-4 rounded-full text-lg shadow-[0_0_40px_rgba(29,185,84,0.3)] hover:scale-105 transition-transform w-full"
+            >
+              Entrar na Rádio
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <header className="flex items-center justify-between p-4 bg-[#181818] border-b border-white/5 relative">
+      <header className="flex-none p-4 flex items-center justify-between z-10 relative bg-[#181818] border-b border-white/5">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/rooms')} className="p-2 text-gray-400 hover:text-white">
+          <button 
+            onClick={() => navigate('/rooms')}
+            className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+          >
             <ChevronLeft size={24} />
           </button>
           <div>
-            <h1 className="text-lg font-bold text-white">{roomName || 'Sala'}</h1>
-            <p className="text-xs text-gray-400 flex items-center gap-1">
-              <Users size={12} /> {presence.length} ouvindo agora
-              <span className={connected ? 'text-[#1db954]' : 'text-red-400'}>
-                {'\u2022'} {connected ? 'sincronizado' : 'offline'}
+            <h1 className="text-lg font-bold text-white line-clamp-1">{roomName || 'Sala'}</h1>
+            <p className="text-xs text-gray-400 flex items-center gap-1 flex-wrap">
+              <Users size={12} /> {presence.length} ouvindo
+              <span className="mx-0.5">•</span>
+              <Mic2 size={12} /> {radialistaName || 'Ninguém'}
+              <span className={connected ? 'text-[#1db954] ml-1' : 'text-red-400 ml-1'}>
+                {'\u2022'} {connected ? 'sinc' : 'off'}
               </span>
             </p>
             <div className="mt-1.5 flex items-center gap-2 flex-wrap">
@@ -395,11 +424,6 @@ export default function Room() {
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/10 text-gray-200 border border-white/10">
                   <Headphones size={12} className={myPosition === 2 ? 'text-[#1db954]' : 'text-gray-400'} />
                   {myPosition === 2 ? 'Você é o próximo radialista' : myPosition > 0 ? `Você está em #${myPosition} na fila` : 'Ouvinte'}
-                </span>
-              )}
-              {!isRadialista && radialistaName && (
-                <span className="text-[11px] text-gray-400">
-                  Radialista: {radialistaName}
                 </span>
               )}
               

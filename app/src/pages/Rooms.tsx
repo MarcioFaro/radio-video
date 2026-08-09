@@ -85,7 +85,11 @@ export default function Rooms() {
   });
 
   return (
-    <div className="min-h-screen p-4 max-w-3xl mx-auto">
+    <div className="min-h-screen bg-[#121212] flex flex-col">
+      <div className="w-full h-1.5 shrink-0">
+        <img src="/rodape.png" alt="" className="w-full h-full object-cover" />
+      </div>
+      <div className="p-4 max-w-3xl mx-auto w-full flex-1">
       {/* Header */}
       <header className="flex items-center justify-between py-6">
         <div className="flex items-center gap-3">
@@ -161,7 +165,7 @@ export default function Rooms() {
 
       {/* Rooms List */}
       <div>
-        <h2 className="text-xl font-bold mb-4 text-white">Lobby: Rádios Ativas</h2>
+        <h2 className="text-xl font-bold mb-4 text-white">Comuna-Radio - Salas Ativas</h2>
         <div className="grid gap-3">
           {sortedRooms.length === 0 ? (
             <p className="text-gray-400 text-center py-8">Nenhuma rádio ativa no momento. Crie a sua!</p>
@@ -169,7 +173,7 @@ export default function Rooms() {
             sortedRooms.map((room) => (
               <button
                 key={room.id}
-                onClick={() => navigate(`/room/${room.id}`)}
+                onClick={() => navigate(`/room/${room.id}`, { state: { usersCount: room.usersCount } })}
                 className="flex items-center justify-between bg-[#181818] hover:bg-[#282828] p-4 rounded-xl border border-white/5 transition-all text-left group"
               >
                 <div className="flex-1">
@@ -207,6 +211,7 @@ export default function Rooms() {
             ))
           )}
         </div>
+      </div>
       </div>
     </div>
   );
