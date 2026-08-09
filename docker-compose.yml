@@ -12,6 +12,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
+      - downloads:/downloads
     depends_on:
       - api
       - extractor
@@ -29,7 +30,10 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    volumes:
+      - downloads:/app/downloads
 
 volumes:
   caddy_data:
   caddy_config:
+  downloads:

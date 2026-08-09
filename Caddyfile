@@ -16,6 +16,13 @@ comunaradio.duckdns.org {
 		reverse_proxy extractor:8000
 	}
 
+	# Rota para arquivos de mídia baixados
+	handle_path /media/* {
+		root * /downloads
+		file_server
+	}
+
+
 	# (Opcional) Resposta padrão caso alguém acesse a raiz
 	handle {
 		respond "Radio Video API is running." 200
