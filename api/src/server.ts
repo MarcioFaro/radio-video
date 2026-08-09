@@ -62,6 +62,12 @@ async function seedRooms(): Promise<void> {
     pausedForEmptyRoom: false,
   };
   rooms.set(SEEDED_ROOM_ID, seeded);
+
+  if (supabase) {
+    const { error } = await supabase.from('rooms').upsert({ id: SEEDED_ROOM_ID, name: SEEDED_ROOM_NAME, codigo_convite: SEEDED_ROOM_CODE });
+    if (error) console.error('[Supabase] Erro ao gravar sala seedada:', error.message);
+  }
+
   console.log(`[seed] Rádio "${SEEDED_ROOM_NAME}" criada com ${queue.length} músicas.`);
 }
 

@@ -243,17 +243,20 @@ export async function removeTrackFromSupabase(trackId: string) {
 
 export async function addFavoriteRoom(userId: string, roomId: string) {
   if (!supabase) return;
-  await supabase.from('user_favorite_rooms').upsert({ user_id: userId, room_id: roomId }, { onConflict: 'user_id,room_id' });
+  const { error } = await supabase.from('user_favorite_rooms').upsert({ user_id: userId, room_id: roomId }, { onConflict: 'user_id,room_id' });
+  if (error) console.error('[Supabase] Erro ao favoritar sala:', error.message, error.details);
 }
 
 export async function removeFavoriteRoom(userId: string, roomId: string) {
   if (!supabase) return;
-  await supabase.from('user_favorite_rooms').delete().eq('user_id', userId).eq('room_id', roomId);
+  const { error } = await supabase.from('user_favorite_rooms').delete().eq('user_id', userId).eq('room_id', roomId);
+  if (error) console.error('[Supabase] Erro ao desfavoritar sala:', error.message, error.details);
 }
 
 export async function getUserFavorites(userId: string): Promise<string[]> {
   if (!supabase) return [];
-  const { data } = await supabase.from('user_favorite_rooms').select('room_id').eq('user_id', userId);
+  const { data, error } = await supabase.from('user_favorite_rooms').select('room_id').eq('user_id', userId);
+  if (error) console.error('[Supabase] Erro ao buscar favoritos:', error.message, error.details);
   return (data || []).map((r: any) => r.room_id);
 }
 

@@ -158,10 +158,18 @@ export default function Room() {
   // Contagem de nao-lidas do chat: usa o historico ja sincronizado como
   // "lido" na primeira conexao, e marca tudo como lido sempre que a aba
   // Chat esta aberta.
+  //
+  // O baseline espera o chat "assentar" (debounce) em vez de capturar
+  // chat.length na hora exata que 'connected' vira true: nesse instante o
+  // historico ainda pode estar vazio localmente (o sync_state do servidor
+  // chega um instante depois), e travar o baseline em 0 faz as mensagens
+  // antigas ja lidas aparecerem como "novas" na proxima entrada na sala.
   useEffect(() => {
-    if (lastSeenChatCount === null && connected) {
+    if (lastSeenChatCount !== null || !connected) return;
+    const timer = setTimeout(() => {
       setLastSeenChatCount(chat.length);
-    }
+    }, 800);
+    return () => clearTimeout(timer);
   }, [connected, chat.length, lastSeenChatCount]);
 
   useEffect(() => {
