@@ -47,6 +47,7 @@ export default function Room() {
   const [showSettings, setShowSettings] = useState(false);
   const [pushMuted, setPushMuted] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
   const [showPauseWarning, setShowPauseWarning] = useState(false);
   
   const playerRef = useRef<HTMLVideoElement | HTMLAudioElement>(null);
@@ -555,15 +556,37 @@ export default function Room() {
                   </button>
                 </div>
 
-                {/* Botão para mostrar vídeo (Minimap feature future proof) + PiP + Mute */}
+                {/* Botão para mostrar vídeo (Minimap feature future proof) + PiP + Volume */}
                 <div className="absolute bottom-4 right-4 z-30 flex gap-2">
-                  <button 
-                    onClick={() => setIsMuted(!isMuted)}
-                    className="p-2 bg-black/50 text-white rounded hover:bg-black/80 transition-colors"
-                    title={isMuted ? 'Ativar som' : 'Mutar som (apenas para você)'}
-                  >
-                    {isMuted ? <VolumeX size={16} className="text-red-400" /> : <Volume2 size={16} />}
-                  </button>
+                  <div className="flex items-center gap-1 bg-black/50 rounded px-2 hover:bg-black/80 transition-colors group">
+                    <button 
+                      onClick={() => {
+                        const newMuted = !isMuted;
+                        setIsMuted(newMuted);
+                        if (!newMuted && volume === 0) {
+                          setVolume(1);
+                          if (playerRef.current) playerRef.current.volume = 1;
+                        }
+                      }}
+                      className="p-1.5 text-white"
+                      title={isMuted ? 'Ativar som' : 'Mutar som (apenas para você)'}
+                    >
+                      {isMuted ? <VolumeX size={16} className="text-red-400" /> : <Volume2 size={16} />}
+                    </button>
+                    <input 
+                      type="range" 
+                      min="0" max="1" step="0.01" 
+                      value={isMuted ? 0 : volume}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setVolume(val);
+                        if (playerRef.current) playerRef.current.volume = val;
+                        setIsMuted(val === 0);
+                      }}
+                      className="w-0 group-hover:w-20 md:w-24 focus:w-24 transition-all cursor-pointer accent-[#1db954]"
+                      title="Controle de Volume"
+                    />
+                  </div>
                   {showVideo && pipSupported && (
                     <button 
                       onClick={togglePip}
