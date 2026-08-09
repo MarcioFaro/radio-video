@@ -77,7 +77,7 @@ fastify.get('/health', async (request, reply) => {
 
 fastify.get('/rooms', async (request, reply) => {
   const activeRooms = Array.from(rooms.values()).map(r => {
-    const radialista = r.radialista_id ? r.users.get(r.radialista_id) : null;
+    const radialista = r.radialista_id ? Array.from(r.users.values()).find(u => u.id === r.radialista_id) : null;
     return {
       id: r.id,
       name: r.name,
