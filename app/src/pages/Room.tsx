@@ -53,6 +53,7 @@ export default function Room() {
   const [volume, setVolume] = useState(1);
   const [showPauseWarning, setShowPauseWarning] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [playerCollapsed, setPlayerCollapsed] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -70,6 +71,14 @@ export default function Room() {
     setShowControls(true);
     if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
     hideControlsTimeoutRef.current = setTimeout(() => setShowControls(false), 2500);
+  };
+
+  // No mobile, o player e a lista dividem a mesma rolagem: ao rolar pra baixo
+  // pra ver a fila, o player encolhe sozinho; ao voltar ao topo, ele volta
+  // ao tamanho normal. No desktop esse container nao rola (cada coluna tem
+  // sua propria rolagem), entao isso nao tem efeito la.
+  const handleContentScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setPlayerCollapsed(e.currentTarget.scrollTop > 24);
   };
 
   useEffect(() => {
@@ -585,11 +594,11 @@ export default function Room() {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        
+      <div onScroll={handleContentScroll} className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+
         {/* Left Side: Player & Info */}
-        <div className="flex-1 flex flex-col p-4 lg:p-8 overflow-y-auto">
-          
+        <div className="flex-1 flex flex-col p-4 lg:p-8 lg:overflow-y-auto">
+
           {/* Video Player Area */}
           <div
             onTouchStart={revealControls}
@@ -601,9 +610,11 @@ export default function Room() {
               setShowControls(false);
             }}
             className={`w-full max-w-5xl mx-auto aspect-video shrink-0 bg-black rounded-xl overflow-hidden relative shadow-2xl flex items-center justify-center transition-all ${
-              showVideo
-                ? 'min-h-[200px] max-h-[40vh] lg:max-h-[50vh]'
-                : 'min-h-[70px] max-h-[13vh] lg:min-h-[200px] lg:max-h-[50vh]'
+              playerCollapsed
+                ? 'min-h-[56px] max-h-[56px] lg:min-h-[200px] lg:max-h-[50vh]'
+                : showVideo
+                  ? 'min-h-[200px] max-h-[40vh] lg:max-h-[50vh]'
+                  : 'min-h-[70px] max-h-[13vh] lg:min-h-[200px] lg:max-h-[50vh]'
             }`}
           >
             {currentTrack ? (
@@ -768,7 +779,7 @@ export default function Room() {
         </div>
 
         {/* Right Side: Sidebar */}
-        <div className="w-full lg:w-96 bg-[#181818] border-l border-white/5 flex flex-col h-[50vh] lg:h-full">
+        <div className="w-full lg:w-96 bg-[#181818] border-l border-white/5 flex flex-col lg:h-full">
           <div className="flex border-b border-white/5">
             <button 
               onClick={() => setActiveTab('queue')}
@@ -784,7 +795,7 @@ export default function Room() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 lg:overflow-y-auto p-4">
             {activeTab === 'queue' ? (
               <div className="space-y-3">
                 {queue.map((track, index) => {
