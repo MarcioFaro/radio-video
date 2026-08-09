@@ -19,7 +19,6 @@ export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
   const [error, setError] = useState('');
   
   const [libraryTracks, setLibraryTracks] = useState<any[]>([]);
-  const [librarySearch, setLibrarySearch] = useState('');
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   
   const addTrack = useRoomStore((state) => state.addTrack);
@@ -93,9 +92,7 @@ export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
     }
   };
 
-  const filteredLibrary = libraryTracks.filter(t => 
-    t.title?.toLowerCase().includes(librarySearch.toLowerCase())
-  );
+  const filteredLibrary = libraryTracks;
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in">
@@ -161,17 +158,6 @@ export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
             </div>
           ) : (
             <div className="space-y-4 h-full flex flex-col">
-              <div className="relative shrink-0">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={librarySearch}
-                  onChange={(e) => setLibrarySearch(e.target.value)}
-                  placeholder="Buscar na biblioteca..."
-                  className="w-full bg-[#282828] text-white rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-[#1db954] focus:ring-1 focus:ring-[#1db954]"
-                />
-              </div>
-              
               <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                 {loadingLibrary ? (
                   <div className="flex justify-center py-8 text-gray-400">
