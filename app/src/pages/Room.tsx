@@ -526,18 +526,6 @@ export default function Room() {
                   </div>
                 )}
 
-                {/* Pré-carregamento invisível (cache-warming) para o próximo pulo ser instantâneo */}
-                {(() => {
-                  const idx = queue.findIndex(t => t.id === currentTrack?.id);
-                  const nextTracks = idx >= 0 ? queue.slice(idx + 1, idx + 3) : [];
-                  return nextTracks.map(track => (
-                    <div key={`preload-${track.id}`} className="hidden">
-                      {track.audio_url && <audio src={track.audio_url} preload="auto" muted />}
-                      {track.video_url && showVideo && <video src={track.video_url} preload="auto" muted playsInline />}
-                    </div>
-                  ));
-                })()}
-                
                 {/* Overlay Controls */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity z-20 flex items-center justify-center gap-4">
                   <button 
