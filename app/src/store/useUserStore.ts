@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface User {
   id: string;
@@ -12,8 +13,10 @@ interface UserStore {
   logout: () => void;
 }
 
-export const useUserStore = create<UserStore>((set) => ({
-  user: null, // Start logged out
+export const useUserStore = create<UserStore>()(
+  persist(
+    (set) => ({
+      user: null, // Start logged out
   login: (name: string) => set({ 
     user: { 
       id: Math.random().toString(36).substr(2, 9), 
@@ -22,4 +25,9 @@ export const useUserStore = create<UserStore>((set) => ({
     } 
   }),
   logout: () => set({ user: null }),
-}));
+    }),
+    {
+      name: 'radio-video-user-storage',
+    }
+  )
+);

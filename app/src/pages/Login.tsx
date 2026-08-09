@@ -1,17 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserStore } from '../store/useUserStore';
 import { Radio } from 'lucide-react';
 
 export default function Login() {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(localStorage.getItem('lastUsername') || '');
+  const user = useUserStore((state) => state.user);
   const login = useUserStore((state) => state.login);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  useEffect(() => {
+    if (user) {
+      const code = searchParams.get('code');
+      navigate(code ? `/join?code=${encodeURIComponent(code)}` : '/rooms', { replace: true });
+    }
+  }, [user, navigate, searchParams]);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim()) {
+      localStorage.setItem('lastUsername', name.trim());
       login(name);
       const code = searchParams.get('code');
       navigate(code ? `/join?code=${encodeURIComponent(code)}` : '/rooms');
