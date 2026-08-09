@@ -90,6 +90,16 @@ fastify.get('/rooms', async (request, reply) => {
   return { rooms: activeRooms };
 });
 
+fastify.get('/library', async (request, reply) => {
+  if (!supabase) return { tracks: [] };
+  const { data, error } = await supabase.from('tracks_library').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error fetching library:', error);
+    return { tracks: [] };
+  }
+  return { tracks: data };
+});
+
 fastify.post('/push/subscribe', async (request, reply) => {
   const { userId, subscription } = request.body as any;
   if (!userId || !subscription) return reply.status(400).send({ error: 'Missing userId or subscription' });
