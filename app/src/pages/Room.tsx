@@ -738,7 +738,10 @@ export default function Room() {
                         <p className="text-xs text-gray-500">{track.adicionado_por}</p>
                       </div>
                       <button
-                        onClick={() => addTrack(track)}
+                        onClick={() => {
+                          addTrack(track);
+                          setActiveTab('queue');
+                        }}
                         title="Tocar novamente (adicionar ao final da fila)"
                         className="p-2 text-gray-400 hover:text-white transition-colors"
                       >
