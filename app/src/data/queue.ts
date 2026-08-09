@@ -60,20 +60,6 @@ const EXTRACTOR_ERRORS: Record<string, string> = {
   unknown: 'Falha ao extrair o vídeo.',
 };
 
-function demoPreview(url: string): TrackPreview {
-  const videoId =
-    url.split('v=')[1]?.split('&')[0] ??
-    url.split('youtu.be/')[1]?.split('?')[0] ??
-    Math.random().toString(36).slice(2, 13);
-  return {
-    id: videoId,
-    titulo: 'Faixa de Demonstração (preview fake)',
-    thumbnail_url: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=320',
-    duracao_seg: 180,
-    audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-  };
-}
-
 export async function previewTrack(url: string): Promise<TrackPreview> {
   let res: Response;
   try {
@@ -86,9 +72,11 @@ export async function previewTrack(url: string): Promise<TrackPreview> {
       signal: controller.signal,
     });
     clearTimeout(timer);
-  } catch {
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    return demoPreview(url);
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error('A busca demorou demais. Tente novamente.');
+    }
+    throw new Error('Não foi possível buscar o vídeo. Verifique sua conexão e tente novamente.');
   }
 
   if (res.ok) {
