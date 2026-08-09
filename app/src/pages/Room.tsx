@@ -39,6 +39,7 @@ export default function Room() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [chatMsg, setChatMsg] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'chat'>('queue');
+  const [lastSeenChatCount, setLastSeenChatCount] = useState<number | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [pipActive, setPipActive] = useState(false);
   const [time, setTime] = useState(0);
@@ -153,6 +154,23 @@ export default function Room() {
 
   const currentTrack = queue.find(t => t.id === playback.currentTrackId) || queue[0];
   const isRadialista = radialista_id === user?.id;
+
+  // Contagem de nao-lidas do chat: usa o historico ja sincronizado como
+  // "lido" na primeira conexao, e marca tudo como lido sempre que a aba
+  // Chat esta aberta.
+  useEffect(() => {
+    if (lastSeenChatCount === null && connected) {
+      setLastSeenChatCount(chat.length);
+    }
+  }, [connected, chat.length, lastSeenChatCount]);
+
+  useEffect(() => {
+    if (activeTab === 'chat') {
+      setLastSeenChatCount(chat.length);
+    }
+  }, [activeTab, chat.length]);
+
+  const unreadChat = activeTab === 'chat' || lastSeenChatCount === null ? 0 : Math.max(0, chat.length - lastSeenChatCount);
 
   const lineup = [...presence].sort((a, b) => (a.entrou_em ?? 0) - (b.entrou_em ?? 0));
   const myIndex = lineup.findIndex(u => u.id === user?.id);
@@ -784,11 +802,22 @@ export default function Room() {
             >
               Fila
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('chat')}
-              className={`flex-1 p-4 font-bold text-sm border-b-2 transition-colors flex items-center justify-center gap-2 ${activeTab === 'chat' ? 'border-[#1db954] text-[#1db954]' : 'border-transparent text-gray-400 hover:text-white'}`}
+              className={`relative flex-1 p-4 font-bold text-sm border-b-2 transition-colors flex items-center justify-center gap-2 ${activeTab === 'chat' ? 'border-[#1db954] text-[#1db954]' : 'border-transparent text-gray-400 hover:text-white'}`}
             >
-              <MessageCircle size={16} /> Chat
+              <span className="relative">
+                <MessageCircle size={16} />
+                {unreadChat > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                    <span className="relative inline-flex items-center justify-center h-4 w-4 rounded-full bg-red-500 text-[9px] font-bold text-white leading-none">
+                      {unreadChat > 9 ? '9+' : unreadChat}
+                    </span>
+                  </span>
+                )}
+              </span>
+              Chat
             </button>
           </div>
 
