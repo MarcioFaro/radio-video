@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../store/useUserStore';
 import { useRoomsStore } from '../store/useRoomsStore';
-import { LogOut, Plus, Users, ArrowRight, KeyRound, Mic2, Star } from 'lucide-react';
+import { LogOut, Plus, Users, ArrowRight, Mic2, Star } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://127.0.0.1:3005';
 
@@ -16,14 +16,11 @@ interface LiveRoom {
 
 export default function Rooms() {
   const { user, logout } = useUserStore();
-  const { createRoom, joinRoom } = useRoomsStore();
+  const { createRoom } = useRoomsStore();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [isCreating, setIsCreating] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
-  const [joinCode, setJoinCode] = useState('');
-  const [joinError, setJoinError] = useState(location.state?.joinError === true);
   
   const [liveRooms, setLiveRooms] = useState<LiveRoom[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -58,16 +55,6 @@ export default function Rooms() {
     }
   };
 
-  const handleJoinByCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!joinCode.trim()) return;
-    const room = joinRoom(joinCode);
-    if (room) {
-      navigate(`/room/${room.id}`);
-    } else {
-      setJoinError(true);
-    }
-  };
 
   const handleLogout = () => {
     logout();
@@ -146,33 +133,7 @@ export default function Rooms() {
         )}
       </div>
 
-      {/* Enter by invite code */}
-      <form onSubmit={handleJoinByCode} className="my-6 flex gap-2">
-        <div className="flex-1 flex items-center gap-2 bg-[#181818] rounded-xl border border-white/5 px-4">
-          <KeyRound size={18} className="text-gray-500" />
-          <input
-            type="text"
-            value={joinCode}
-            onChange={(e) => {
-              setJoinCode(e.target.value);
-              setJoinError(false);
-            }}
-            placeholder="Código de convite..."
-            className="flex-1 bg-transparent text-white py-3 focus:outline-none placeholder:text-gray-600"
-          />
-        </div>
-        <button
-          type="submit"
-          className="bg-white/10 hover:bg-white/20 text-white font-bold px-6 rounded-xl transition-colors"
-        >
-          Entrar
-        </button>
-      </form>
-      {joinError && (
-        <p className="text-red-400 text-sm -mt-4 mb-6">
-          Código de convite inválido. Confira o código e tente novamente.
-        </p>
-      )}
+
 
       {/* Rooms List */}
       <div>
@@ -199,10 +160,7 @@ export default function Rooms() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5 mt-2 text-gray-400 text-sm">
-                    <div className="flex items-center gap-2">
-                      <KeyRound size={14} />
-                      <span>Código: {room.codigo_convite}</span>
-                    </div>
+
                     <div className="flex items-center gap-2">
                       <Users size={14} className={room.usersCount > 0 ? 'text-[#1db954]' : ''} />
                       <span className={room.usersCount > 0 ? 'text-white font-medium' : ''}>
