@@ -28,6 +28,7 @@ services:
     environment:
       - SUPABASE_URL=https://pskbycyehmifqemjopyu.supabase.co
       - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBza2J5Y3llaG1pZnFlbWpvcHl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyNDI5NDgsImV4cCI6MjEwMTgxODk0OH0.A2JCqutKlsnb2UBJKPj-o-Ll4Jaeo-7sL3LG3c0FjW0
+      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBza2J5Y3llaG1pZnFlbWpvcHl1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjI0Mjk0OCwiZXhwIjoyMTAxODE4OTQ4fQ.KDj8tzWLcjAGNGmKDdaIZlU122lnwNu9KCTFD9ZWzgk
     
   extractor:
     build:
