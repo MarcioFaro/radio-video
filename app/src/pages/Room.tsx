@@ -37,7 +37,7 @@ export default function Room() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [chatMsg, setChatMsg] = useState('');
-  const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'chat'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'chat'>('queue');
   const [showVideo, setShowVideo] = useState(false);
   const [pipActive, setPipActive] = useState(false);
   const [time, setTime] = useState(0);
@@ -678,12 +678,6 @@ export default function Room() {
               Fila
             </button>
             <button 
-              onClick={() => setActiveTab('history')}
-              className={`flex-1 p-4 font-bold text-sm border-b-2 transition-colors flex items-center justify-center gap-2 ${activeTab === 'history' ? 'border-[#1db954] text-[#1db954]' : 'border-transparent text-gray-400 hover:text-white'}`}
-            >
-              <History size={16} /> Histórico
-            </button>
-            <button 
               onClick={() => setActiveTab('chat')}
               className={`flex-1 p-4 font-bold text-sm border-b-2 transition-colors flex items-center justify-center gap-2 ${activeTab === 'chat' ? 'border-[#1db954] text-[#1db954]' : 'border-transparent text-gray-400 hover:text-white'}`}
             >
@@ -764,31 +758,6 @@ export default function Room() {
                   );
                 })}
               </div>
-            ) : activeTab === 'history' ? (
-              <div className="space-y-3">
-                {history.length === 0 ? (
-                  <p className="text-gray-500 text-center text-sm mt-4">O histórico está vazio.</p>
-                ) : (
-                  [...history].reverse().map((track) => (
-                    <div key={`hist-${track.id}`} className="flex gap-3 items-center p-2 rounded-lg bg-white/5 opacity-80 hover:opacity-100 transition-opacity">
-                      <img src={track.thumbnail_url} alt="" className="w-10 h-10 object-cover rounded grayscale" />
-                      <div className="flex-1 overflow-hidden">
-                        <p className="text-sm font-medium line-clamp-1 text-gray-300">{track.titulo}</p>
-                        <p className="text-xs text-gray-500">{track.adicionado_por}</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          addTrack(track);
-                          setActiveTab('queue');
-                        }}
-                        title="Tocar novamente (adicionar ao final da fila)"
-                        className="p-2 text-gray-400 hover:text-white transition-colors"
-                      >
-                        <RotateCcw size={16} />
-                      </button>
-                    </div>
-                  ))
-                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -803,7 +772,7 @@ export default function Room() {
           </div>
 
           <div className="p-4 border-t border-white/5 bg-[#121212]">
-            {activeTab === 'queue' || activeTab === 'history' ? (
+            {activeTab === 'queue' ? (
               <button 
                 onClick={() => setIsModalOpen(true)}
                 className="w-full flex items-center justify-center gap-2 bg-transparent border border-gray-600 hover:border-white text-white font-bold py-3 rounded-full transition-colors"
