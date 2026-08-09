@@ -216,6 +216,8 @@ io.on('connection', (socket) => {
     
     // Save current roomId in socket session for disconnect
     socket.data.roomId = roomId;
+
+    scheduleSave();
   });
 
   socket.on('send_message', (data: { roomId: string, userName: string, text: string }) => {
@@ -272,6 +274,8 @@ io.on('connection', (socket) => {
           url: `/room/${data.roomId}`
         }).catch(console.error);
       }
+      
+      scheduleSave();
     }
   });
 
