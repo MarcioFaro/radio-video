@@ -180,7 +180,7 @@ export async function saveTrackToSupabase(roomId: string, track: Track) {
 
   try {
     // 1. Upsert na biblioteca global (não duplica se o vídeo já existir)
-    await supabase.from('tracks_library').upsert({
+    const { error: libError } = await supabase.from('tracks_library').upsert({
       youtube_id: track.youtube_video_id,
       titulo: track.titulo,
       duracao_seg: track.duracao_seg || 0,
@@ -188,6 +188,7 @@ export async function saveTrackToSupabase(roomId: string, track: Track) {
       audio_url: track.audio_url,
       video_url: track.video_url,
     }, { onConflict: 'youtube_id' });
+    if (libError) console.error('[Supabase] Erro ao gravar em tracks_library:', libError.message, libError.details);
 
     // 2. Determina o próximo order_index
     const { data: lastTrack } = await supabase
@@ -197,11 +198,11 @@ export async function saveTrackToSupabase(roomId: string, track: Track) {
       .order('order_index', { ascending: false })
       .limit(1)
       .single();
-    
+
     const nextIndex = (lastTrack?.order_index ?? -1) + 1;
 
     // 3. Insere na fila da rádio com o ID do track da memória (para manter consistência)
-    await supabase.from('room_tracks').insert({
+    const { error: queueError } = await supabase.from('room_tracks').insert({
       id: track.id,
       room_id: roomId,
       youtube_id: track.youtube_video_id,
@@ -209,6 +210,7 @@ export async function saveTrackToSupabase(roomId: string, track: Track) {
       order_index: nextIndex,
       status: 'fila',
     });
+    if (queueError) console.error('[Supabase] Erro ao gravar em room_tracks:', queueError.message, queueError.details);
   } catch (e) {
     console.error('[Supabase] Erro ao salvar track:', e);
   }

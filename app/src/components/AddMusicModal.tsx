@@ -81,9 +81,9 @@ export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
     if (user) {
       addTrack({
         youtube_video_id: track.youtube_id,
-        titulo: track.title,
+        titulo: track.titulo,
         thumbnail_url: track.thumbnail_url,
-        duracao_seg: track.duration,
+        duracao_seg: track.duracao_seg,
         audio_url: track.audio_url || '',
         video_url: track.video_url || '',
         adicionado_por: user.name
@@ -179,9 +179,9 @@ export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-white text-sm font-medium line-clamp-1 group-hover:text-[#1db954] transition-colors">{track.title}</h4>
+                        <h4 className="text-white text-sm font-medium line-clamp-1 group-hover:text-[#1db954] transition-colors">{track.titulo}</h4>
                         <p className="text-xs text-gray-400">
-                          {Math.floor(track.duration / 60)}:{String(track.duration % 60).padStart(2, '0')}
+                          {Math.floor(track.duracao_seg / 60)}:{String(track.duracao_seg % 60).padStart(2, '0')}
                         </p>
                       </div>
                     </button>
