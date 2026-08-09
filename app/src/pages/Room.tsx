@@ -513,7 +513,7 @@ export default function Room() {
       )}
 
       {/* Header */}
-      <header className="flex-none p-4 flex items-center justify-between z-10 relative bg-[#181818] border-b border-white/5">
+      <header className="flex-none p-4 flex items-center justify-between z-40 relative bg-[#181818] border-b border-white/5">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => navigate('/rooms')}
