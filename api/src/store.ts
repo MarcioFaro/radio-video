@@ -322,6 +322,18 @@ export function removeUserFromRoom(room: Room, socketId: string): User | undefin
   return leaving;
 }
 
+const CHAT_MESSAGE_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Remove do chat da sala mensagens com mais de 24h. Retorna true se alguma
+// mensagem foi removida (para o chamador decidir se precisa avisar clientes
+// ja conectados).
+export function pruneOldChatMessages(room: Room): boolean {
+  const cutoff = Date.now() - CHAT_MESSAGE_TTL_MS;
+  const before = room.chat.length;
+  room.chat = room.chat.filter((msg) => msg.timestamp >= cutoff);
+  return room.chat.length !== before;
+}
+
 // Radialista = membro presente há mais tempo (menor entrou_em)
 export function pickRadialista(room: Room): string | null {
   let oldestId: string | null = null;

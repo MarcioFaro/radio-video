@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
 import webpush from 'web-push';
-import { rooms, getOrCreateRoom, pickRadialista, removeUserFromRoom, User, Track, Room, pushSubscriptions, syncUserToSupabase, supabase, loadRooms, scheduleSave, saveTrackToSupabase, updateTrackStatusInSupabase, updateTrackOrderInSupabase, removeTrackFromSupabase, addFavoriteRoom, removeFavoriteRoom, getUserFavorites } from './store';
+import { rooms, getOrCreateRoom, pickRadialista, removeUserFromRoom, pruneOldChatMessages, User, Track, Room, pushSubscriptions, syncUserToSupabase, supabase, loadRooms, scheduleSave, saveTrackToSupabase, updateTrackStatusInSupabase, updateTrackOrderInSupabase, removeTrackFromSupabase, addFavoriteRoom, removeFavoriteRoom, getUserFavorites } from './store';
 import { SEEDED_ROOM_ID, SEEDED_ROOM_NAME, SEEDED_ROOM_CODE, SEEDED_SONGS, SeedSong } from './seed';
 
 const vapidKeys = {
@@ -219,6 +219,7 @@ io.on('connection', (socket) => {
     socket.join(roomId);
 
     const room = getOrCreateRoom(roomId, roomName, user.id);
+    pruneOldChatMessages(room);
 
     // Se a sala estava vazia e foi a propria ausencia de gente que pausou a
     // musica, retoma exatamente do ponto congelado. Se estava pausada por
@@ -528,6 +529,18 @@ setInterval(() => {
     }
   }
 }, 1000);
+
+// Mensagens de chat expiram apos 24h (ver CHAT_MESSAGE_TTL_MS em store.ts).
+// Nao precisa de precisao de segundo, entao roda num intervalo separado e
+// mais espacado do failsafe de playback acima.
+setInterval(() => {
+  for (const room of rooms.values()) {
+    if (pruneOldChatMessages(room)) {
+      io.to(room.id).emit('chat_updated', room.chat);
+      scheduleSave();
+    }
+  }
+}, 5 * 60 * 1000);
 
 const start = async () => {
   try {

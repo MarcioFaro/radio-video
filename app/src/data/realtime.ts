@@ -79,6 +79,12 @@ function wireSocket(): void {
     notifyRoom(currentRoomId);
   });
 
+  socket.on('chat_updated', (chat: ChatMessage[]) => {
+    if (!currentRoomId) return;
+    chatData.applyMessages(currentRoomId, chat);
+    notifyRoom(currentRoomId);
+  });
+
   socket.on('playback_updated', (playback: PlaybackState) => {
     if (!currentRoomId) return;
     playbackData.applyPlayback(currentRoomId, playback);
