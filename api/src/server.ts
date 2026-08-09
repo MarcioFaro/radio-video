@@ -213,6 +213,13 @@ io.on('connection', (socket) => {
 
     const room = getOrCreateRoom(roomId, roomName, user.id);
 
+    // Se a sala estava vazia, a musica atual recomeca do zero para quem entrar
+    const wasEmpty = room.users.size === 0;
+    if (wasEmpty) {
+      room.playback.timestamp = 0;
+      room.playback.updated_at = Date.now();
+    }
+
     const newUser: User = { ...user, socket_id: socket.id, entrou_em: Date.now() };
     room.users.set(socket.id, newUser);
     syncUserToSupabase(user);
