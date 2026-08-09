@@ -2,13 +2,21 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUserStore } from '../store/useUserStore';
 import { useRoomsStore } from '../store/useRoomsStore';
-import { LogOut, Plus, Users, ArrowRight, KeyRound, Mic2 } from 'lucide-react';
+import { LogOut, Plus, Users, ArrowRight, KeyRound, Mic2, Star } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://127.0.0.1:3005';
 
+interface LiveRoom {
+  id: string;
+  name: string;
+  codigo_convite: string;
+  usersCount: number;
+  radialistaName: string | null;
+}
+
 export default function Rooms() {
   const { user, logout } = useUserStore();
-  const { rooms, createRoom, joinRoom } = useRoomsStore();
+  const { createRoom, joinRoom } = useRoomsStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -16,19 +24,23 @@ export default function Rooms() {
   const [newRoomName, setNewRoomName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState(location.state?.joinError === true);
-  const [liveRooms, setLiveRooms] = useState<Record<string, { usersCount: number, radialistaName: string | null }>>({});
+  
+  const [liveRooms, setLiveRooms] = useState<LiveRoom[]>([]);
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('comuna_favorites') || '[]');
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     fetch(`${BACKEND_URL}/rooms`)
       .then(res => res.json())
       .then(data => {
-        const map: Record<string, any> = {};
         if (data.rooms) {
-          data.rooms.forEach((r: any) => {
-            map[r.id] = r;
-          });
+          setLiveRooms(data.rooms);
         }
-        setLiveRooms(map);
       })
       .catch(err => console.error('Error fetching live rooms:', err));
   }, []);
@@ -56,6 +68,21 @@ export default function Rooms() {
     logout();
     navigate('/');
   };
+
+  const toggleFavorite = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const next = favorites.includes(id) ? favorites.filter(f => f !== id) : [...favorites, id];
+    setFavorites(next);
+    localStorage.setItem('comuna_favorites', JSON.stringify(next));
+  };
+
+  const sortedRooms = [...liveRooms].sort((a, b) => {
+    const aFav = favorites.includes(a.id);
+    const bFav = favorites.includes(b.id);
+    if (aFav && !bFav) return -1;
+    if (!aFav && bFav) return 1;
+    return b.usersCount - a.usersCount; // Critério de desempate: mais ouvintes
+  });
 
   return (
     <div className="min-h-screen p-4 max-w-3xl mx-auto">
@@ -134,38 +161,51 @@ export default function Rooms() {
 
       {/* Rooms List */}
       <div>
-        <h2 className="text-xl font-bold mb-4 text-white">Suas Rádios</h2>
+        <h2 className="text-xl font-bold mb-4 text-white">Lobby: Rádios Ativas</h2>
         <div className="grid gap-3">
-          {rooms.map((room) => (
-            <button
-              key={room.id}
-              onClick={() => navigate(`/room/${room.id}`)}
-              className="flex items-center justify-between bg-[#181818] hover:bg-[#282828] p-4 rounded-xl border border-white/5 transition-all text-left group"
-            >
-              <div>
-                <h3 className="font-bold text-lg text-white group-hover:text-[#1db954] transition-colors">{room.name}</h3>
-                <div className="flex flex-col gap-1.5 mt-2 text-gray-400 text-sm">
-                  <div className="flex items-center gap-2">
-                    <KeyRound size={14} />
-                    <span>Código: {room.codigo_convite}</span>
+          {sortedRooms.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">Nenhuma rádio ativa no momento. Crie a sua!</p>
+          ) : (
+            sortedRooms.map((room) => (
+              <button
+                key={room.id}
+                onClick={() => navigate(`/room/${room.id}`)}
+                className="flex items-center justify-between bg-[#181818] hover:bg-[#282828] p-4 rounded-xl border border-white/5 transition-all text-left group"
+              >
+                <div className="flex-1">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-bold text-lg text-white group-hover:text-[#1db954] transition-colors pr-4">{room.name}</h3>
+                    <div 
+                      onClick={(e) => toggleFavorite(e, room.id)}
+                      className={`p-1.5 rounded-full hover:bg-white/10 transition-colors ${favorites.includes(room.id) ? 'text-[#1db954]' : 'text-gray-600'}`}
+                      title={favorites.includes(room.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                    >
+                      <Star size={18} fill={favorites.includes(room.id) ? 'currentColor' : 'none'} />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Users size={14} className={liveRooms[room.id]?.usersCount > 0 ? 'text-[#1db954]' : ''} />
-                    <span className={liveRooms[room.id]?.usersCount > 0 ? 'text-white font-medium' : ''}>
-                      {liveRooms[room.id]?.usersCount || 0} ouvintes
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Mic2 size={14} />
-                    <span>Radialista: {liveRooms[room.id]?.radialistaName || 'Ninguém'}</span>
+                  <div className="flex flex-col gap-1.5 mt-2 text-gray-400 text-sm">
+                    <div className="flex items-center gap-2">
+                      <KeyRound size={14} />
+                      <span>Código: {room.codigo_convite}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Users size={14} className={room.usersCount > 0 ? 'text-[#1db954]' : ''} />
+                      <span className={room.usersCount > 0 ? 'text-white font-medium' : ''}>
+                        {room.usersCount} ouvintes
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mic2 size={14} />
+                      <span>Radialista: {room.radialistaName || 'Ninguém'}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-[#1db954] group-hover:text-black transition-colors text-gray-400">
-                <ArrowRight size={20} />
-              </div>
-            </button>
-          ))}
+                <div className="w-10 h-10 ml-4 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-[#1db954] group-hover:text-black transition-colors text-gray-400 shrink-0">
+                  <ArrowRight size={20} />
+                </div>
+              </button>
+            ))
+          )}
         </div>
       </div>
     </div>

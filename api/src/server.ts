@@ -80,6 +80,8 @@ fastify.get('/rooms', async (request, reply) => {
     const radialista = r.radialista_id ? r.users.get(r.radialista_id) : null;
     return {
       id: r.id,
+      name: r.name,
+      codigo_convite: r.codigo_convite,
       usersCount: r.users.size,
       radialistaName: radialista ? radialista.name : null
     };
