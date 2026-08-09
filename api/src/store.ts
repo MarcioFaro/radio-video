@@ -51,6 +51,10 @@ export interface Room {
     timestamp: number;
     updated_at: number;
   };
+  // true quando o playback foi pausado automaticamente por a sala ter ficado
+  // vazia (para diferenciar de um pause manual ao decidir se retoma sozinho
+  // quando alguem entra de novo)
+  pausedForEmptyRoom: boolean;
 }
 
 // In-memory store
@@ -153,7 +157,8 @@ export async function loadRooms() {
           queue,
           history: [],
           chat: [],
-          playback: { status: 'paused', currentTrackId: queue[0]?.id ?? null, timestamp: 0, updated_at: Date.now() }
+          playback: { status: 'paused', currentTrackId: queue[0]?.id ?? null, timestamp: 0, updated_at: Date.now() },
+          pausedForEmptyRoom: false
         });
       } else {
         // Atualiza a fila da sala já existente na memória com os dados do Supabase
@@ -272,7 +277,8 @@ export function getOrCreateRoom(roomId: string, roomName: string, radialistaId: 
         currentTrackId: null,
         timestamp: 0,
         updated_at: Date.now()
-      }
+      },
+      pausedForEmptyRoom: false
     };
     rooms.set(roomId, newRoom);
 
@@ -289,6 +295,28 @@ export function syncUserToSupabase(user: { id: string; name: string }) {
     supabase.from('users').upsert({ id: user.id, name: user.name })
       .then(res => { if (res.error) console.error('[Supabase] Erro ao salvar user:', res.error.message); });
   }
+}
+
+// Remove um usuario da sala. Se essa saida deixar a sala vazia enquanto a
+// musica estava tocando, congela a posicao ao vivo e pausa, marcando que foi
+// a propria sala-vazia que pausou (para saber se deve retomar sozinha depois).
+export function removeUserFromRoom(room: Room, socketId: string): User | undefined {
+  const leaving = room.users.get(socketId);
+  room.users.delete(socketId);
+
+  if (room.users.size === 0 && room.playback.status === 'playing') {
+    const now = Date.now();
+    const livePosition = room.playback.timestamp + (now - room.playback.updated_at) / 1000;
+    room.playback = {
+      ...room.playback,
+      status: 'paused',
+      timestamp: livePosition,
+      updated_at: now,
+    };
+    room.pausedForEmptyRoom = true;
+  }
+
+  return leaving;
 }
 
 // Radialista = membro presente há mais tempo (menor entrou_em)

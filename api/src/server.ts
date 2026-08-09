@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
 import webpush from 'web-push';
-import { rooms, getOrCreateRoom, pickRadialista, User, Track, Room, pushSubscriptions, syncUserToSupabase, supabase, loadRooms, scheduleSave, saveTrackToSupabase, updateTrackStatusInSupabase, updateTrackOrderInSupabase, removeTrackFromSupabase, addFavoriteRoom, removeFavoriteRoom, getUserFavorites } from './store';
+import { rooms, getOrCreateRoom, pickRadialista, removeUserFromRoom, User, Track, Room, pushSubscriptions, syncUserToSupabase, supabase, loadRooms, scheduleSave, saveTrackToSupabase, updateTrackStatusInSupabase, updateTrackOrderInSupabase, removeTrackFromSupabase, addFavoriteRoom, removeFavoriteRoom, getUserFavorites } from './store';
 import { SEEDED_ROOM_ID, SEEDED_ROOM_NAME, SEEDED_ROOM_CODE, SEEDED_SONGS, SeedSong } from './seed';
 
 const vapidKeys = {
@@ -59,6 +59,7 @@ async function seedRooms(): Promise<void> {
     history: [],
     chat: [],
     playback: { status: 'paused', currentTrackId: queue[0]?.id ?? null, timestamp: 0, updated_at: Date.now() },
+    pausedForEmptyRoom: false,
   };
   rooms.set(SEEDED_ROOM_ID, seeded);
   console.log(`[seed] Rádio "${SEEDED_ROOM_NAME}" criada com ${queue.length} músicas.`);
@@ -213,11 +214,13 @@ io.on('connection', (socket) => {
 
     const room = getOrCreateRoom(roomId, roomName, user.id);
 
-    // Se a sala estava vazia, a musica atual recomeca do zero para quem entrar
+    // Se a sala estava vazia e foi a propria ausencia de gente que pausou a
+    // musica, retoma exatamente do ponto congelado. Se estava pausada por
+    // outro motivo (ex: pause manual antes de todos sairem), continua parada.
     const wasEmpty = room.users.size === 0;
-    if (wasEmpty) {
-      room.playback.timestamp = 0;
-      room.playback.updated_at = Date.now();
+    if (wasEmpty && room.pausedForEmptyRoom) {
+      room.playback = { ...room.playback, status: 'playing', updated_at: Date.now() };
+      room.pausedForEmptyRoom = false;
     }
 
     const newUser: User = { ...user, socket_id: socket.id, entrou_em: Date.now() };
@@ -450,8 +453,7 @@ io.on('connection', (socket) => {
     if (roomId) {
       const room = rooms.get(roomId);
       if (room) {
-        const leaving = room.users.get(socket.id);
-        room.users.delete(socket.id);
+        const leaving = removeUserFromRoom(room, socket.id);
         io.to(roomId).emit('user_left', { socket_id: socket.id, users: Array.from(room.users.values()) });
 
         // Se o radialista saiu, transfere o papel para o membro mais antigo restante
@@ -472,8 +474,7 @@ io.on('connection', (socket) => {
     if (roomId) {
       const room = rooms.get(roomId);
       if (room) {
-        const leaving = room.users.get(socket.id);
-        room.users.delete(socket.id);
+        const leaving = removeUserFromRoom(room, socket.id);
         io.to(roomId).emit('user_left', { socket_id: socket.id, users: Array.from(room.users.values()) });
 
         // Se o radialista saiu, transfere o papel
