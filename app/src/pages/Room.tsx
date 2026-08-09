@@ -505,7 +505,7 @@ export default function Room() {
         <div className="flex-1 flex flex-col p-4 lg:p-8 overflow-y-auto">
           
           {/* Video Player Area */}
-          <div className="w-full aspect-video shrink-0 min-h-[200px] bg-black rounded-xl overflow-hidden relative shadow-2xl group flex items-center justify-center">
+          <div className="w-full max-w-5xl mx-auto aspect-video shrink-0 min-h-[200px] max-h-[40vh] lg:max-h-[50vh] bg-black rounded-xl overflow-hidden relative shadow-2xl group flex items-center justify-center">
             {currentTrack ? (
               <>
                 {/* Imagem de Fundo (Blur) */}
