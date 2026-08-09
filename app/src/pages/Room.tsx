@@ -54,10 +54,17 @@ export default function Room() {
   const [showPauseWarning, setShowPauseWarning] = useState(false);
   const [showControls, setShowControls] = useState(false);
 
-  const playerRef = useRef<HTMLVideoElement | HTMLAudioElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const lastSyncTsRef = useRef<number | null>(null);
   const hideControlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // No modo video, o <video> e' o motor de reproducao. No modo so-audio,
+  // usamos um <audio> dedicado: iOS mantem reproducao em segundo plano de
+  // forma muito mais confiavel em <audio> do que em <video> escondido.
+  const getActiveEl = (): HTMLVideoElement | HTMLAudioElement | null =>
+    showVideo ? videoRef.current : audioRef.current;
 
   const revealControls = () => {
     setShowControls(true);
@@ -80,19 +87,19 @@ export default function Room() {
 
   const timeFromPointer = useCallback((clientX: number) => {
     const bar = barRef.current;
-    const el = playerRef.current;
+    const el = getActiveEl();
     if (!bar || !el || !duration) return 0;
     const rect = bar.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
     return ratio * duration;
-  }, [duration]);
+  }, [duration, showVideo]);
 
   const pipSupported =
     typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
 
   const togglePip = () => {
-    const el = playerRef.current;
-    if (!el || !(el instanceof HTMLVideoElement)) return;
+    const el = videoRef.current;
+    if (!el) return;
 
     const openPip = () => {
       if (document.pictureInPictureElement === el) {
@@ -145,7 +152,7 @@ export default function Room() {
 
   // Sincroniza o player HTML com o estado do Zustand (via Sockets)
   useEffect(() => {
-    const el = playerRef.current;
+    const el = getActiveEl();
     if (el && mediaSrc) {
       if (el.src !== mediaSrc) {
         el.src = mediaSrc;
@@ -174,11 +181,11 @@ export default function Room() {
         }
       }
     }
-  }, [playback.status, playback.currentTrackId, playback.timestamp, currentTrack, mediaSrc]);
+  }, [playback.status, playback.currentTrackId, playback.timestamp, currentTrack, mediaSrc, showVideo]);
 
   // Acompanha o progresso do player (time / duration) e corrige deriva
   useEffect(() => {
-    const el = playerRef.current;
+    const el = getActiveEl();
     if (!el) return;
     const onTime = () => {
       if (!dragging) {
@@ -205,23 +212,24 @@ export default function Room() {
     };
   }, [showVideo, currentTrack, dragging, playback.status, playback.timestamp, playback.updated_at, connected]);
 
-  // Reseta o progresso ao trocar de faixa
+  // Reseta o progresso ao trocar de faixa (nao ao trocar so o modo video/audio)
   useEffect(() => {
     setTime(0);
     setDuration(0);
     lastSyncTsRef.current = null;
-    if (playerRef.current) {
-      playerRef.current.currentTime = 0;
+    const el = getActiveEl();
+    if (el) {
+      el.currentTime = 0;
     }
-  }, [mediaSrc]);
+  }, [currentTrack?.id]);
 
   // O Auto-advance agora é gerenciado pelo Backend na Fase 6.
   // Nenhum cliente avança a fila sozinho por eventos locais.
 
   // Estado do Picture-in-Picture (nativo, apenas no modo vídeo)
   useEffect(() => {
-    const el = playerRef.current;
-    if (!el || !(el instanceof HTMLVideoElement)) return;
+    const el = videoRef.current;
+    if (!el) return;
     const enter = () => setPipActive(true);
     const leave = () => setPipActive(false);
     el.addEventListener('enterpictureinpicture', enter);
@@ -295,24 +303,26 @@ export default function Room() {
     }
     
     const newStatus = playback.status === 'playing' ? 'paused' : 'playing';
-    const currentTime = playerRef.current ? playerRef.current.currentTime : 0;
-    
+    const activeEl = getActiveEl();
+    const currentTime = activeEl ? activeEl.currentTime : 0;
+
     // Força a ação síncrona no elemento para evitar bloqueio no celular
-    if (playerRef.current) {
+    if (activeEl) {
       if (newStatus === 'playing') {
-        playerRef.current.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
+        activeEl.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
       } else {
-        playerRef.current.pause();
+        activeEl.pause();
       }
     }
-    
+
     setPlaybackStatus(newStatus, currentTrack.id, currentTime);
   };
 
   const confirmPauseAndLeave = () => {
     setShowPauseWarning(false);
-    if (playerRef.current) {
-      playerRef.current.pause();
+    const activeEl = getActiveEl();
+    if (activeEl) {
+      activeEl.pause();
     }
     leaveRoom();
     navigate('/rooms');
@@ -344,10 +354,49 @@ export default function Room() {
   const handleSeekEnd = () => {
     if (!dragging) return;
     const finalTime = time;
-    const el = playerRef.current;
+    const el = getActiveEl();
     if (el) el.currentTime = finalTime;
     if (isRadialista) seekTo(finalTime);
     setDragging(false);
+  };
+
+  const handleTrackEnded = () => {
+    if (isRadialista && currentTrack) {
+      trackEnded(currentTrack.id);
+    }
+  };
+
+  const handleToggleVideo = () => {
+    const goingToVideo = !showVideo;
+    const fromEl = showVideo ? videoRef.current : audioRef.current;
+    const toEl = goingToVideo ? videoRef.current : audioRef.current;
+    const targetSrc = goingToVideo ? currentTrack?.video_url : currentTrack?.audio_url;
+
+    const wasPlaying = fromEl ? !fromEl.paused : playback.status === 'playing';
+    const currentPos = fromEl ? fromEl.currentTime : time;
+
+    if (fromEl) fromEl.pause();
+
+    if (toEl && targetSrc) {
+      if (toEl.src !== targetSrc) toEl.src = targetSrc;
+      toEl.volume = volume;
+
+      const resume = () => {
+        toEl.currentTime = currentPos;
+        if (wasPlaying) {
+          toEl.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
+        }
+      };
+
+      if (toEl.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        resume();
+      } else {
+        toEl.addEventListener('loadedmetadata', resume, { once: true });
+      }
+    }
+
+    setShowVideo(goingToVideo);
+    if (!goingToVideo) setPipActive(false);
   };
 
   const handleTogglePush = async () => {
@@ -562,18 +611,20 @@ export default function Room() {
                 {/* Imagem de Fundo (Blur) */}
                 <img src={currentTrack.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-xl" />
                 
-                <video 
-                  ref={playerRef as any} 
-                  className={`w-full h-full object-contain z-10 ${showVideo ? 'relative' : 'absolute opacity-0 pointer-events-none'}`} 
-                  playsInline 
-                  muted={isMuted} 
-                  onEnded={() => {
-                    if (isRadialista && currentTrack) {
-                      trackEnded(currentTrack.id);
-                    }
-                  }}
+                <video
+                  ref={videoRef}
+                  className={`w-full h-full object-contain z-10 ${showVideo ? 'relative' : 'absolute opacity-0 pointer-events-none'}`}
+                  playsInline
+                  muted={isMuted}
+                  onEnded={handleTrackEnded}
                 />
-                
+                <audio
+                  ref={audioRef}
+                  muted={isMuted}
+                  onEnded={handleTrackEnded}
+                  className="hidden"
+                />
+
                 {!showVideo && (
                   <img src={currentTrack.thumbnail_url} alt="Cover" className="relative h-full object-contain z-10 shadow-2xl rounded-lg" />
                 )}
@@ -585,11 +636,12 @@ export default function Room() {
                       <VolumeX size={48} className="text-red-400 mb-4" />
                       <h3 className="text-white font-bold text-lg mb-2">Áudio Bloqueado</h3>
                       <p className="text-gray-400 text-sm mb-6">O seu navegador bloqueou a reprodução automática.</p>
-                      <button 
+                      <button
                         onClick={() => {
                           setAutoplayBlocked(false);
-                          if (playerRef.current) {
-                            playerRef.current.play().catch(() => setAutoplayBlocked(true));
+                          const el = getActiveEl();
+                          if (el) {
+                            el.play().catch(() => setAutoplayBlocked(true));
                           }
                         }}
                         className="bg-[#1db954] text-black px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform"
@@ -627,7 +679,8 @@ export default function Room() {
                         setIsMuted(newMuted);
                         if (!newMuted && volume === 0) {
                           setVolume(1);
-                          if (playerRef.current) playerRef.current.volume = 1;
+                          const el = getActiveEl();
+                          if (el) el.volume = 1;
                         }
                       }}
                       className="p-1.5 text-white"
@@ -642,7 +695,8 @@ export default function Room() {
                       onChange={(e) => {
                         const val = parseFloat(e.target.value);
                         setVolume(val);
-                        if (playerRef.current) playerRef.current.volume = val;
+                        const el = getActiveEl();
+                        if (el) el.volume = val;
                         setIsMuted(val === 0);
                       }}
                       className="w-0 group-hover:w-20 md:w-24 focus:w-24 transition-all cursor-pointer accent-[#1db954]"
@@ -658,11 +712,8 @@ export default function Room() {
                       <PictureInPicture2 size={16} className={pipActive ? 'text-[#1db954]' : 'text-white'} />
                     </button>
                   )}
-                  <button 
-                    onClick={() => {
-                      setShowVideo(!showVideo);
-                      if (showVideo) setPipActive(false);
-                    }}
+                  <button
+                    onClick={handleToggleVideo}
                     className="p-2 bg-black/50 text-white rounded hover:bg-black/80 transition-colors"
                     title="Ativar/Desativar Vídeo"
                   >
