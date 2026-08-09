@@ -41,6 +41,7 @@ export default function Room() {
   const [duration, setDuration] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   
   const [sleepMinutes, setSleepMinutes] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -133,7 +134,12 @@ export default function Room() {
       }
       
       if (playback.status === 'playing') {
-        if (el.paused) el.play().catch(e => console.log('Autoplay blocked:', e));
+        if (el.paused) {
+          el.play().then(() => setAutoplayBlocked(false)).catch(e => {
+            console.log('Autoplay blocked:', e);
+            setAutoplayBlocked(true);
+          });
+        }
       } else {
         el.pause();
       }
@@ -228,6 +234,16 @@ export default function Room() {
     
     const newStatus = playback.status === 'playing' ? 'paused' : 'playing';
     const currentTime = playerRef.current ? playerRef.current.currentTime : 0;
+    
+    // Força a ação síncrona no elemento para evitar bloqueio no celular
+    if (playerRef.current) {
+      if (newStatus === 'playing') {
+        playerRef.current.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
+      } else {
+        playerRef.current.pause();
+      }
+    }
+    
     setPlaybackStatus(newStatus, currentTrack.id, currentTime);
   };
 
@@ -464,6 +480,28 @@ export default function Room() {
                     <img src={currentTrack.thumbnail_url} alt="Cover" className="relative h-full object-contain z-10 shadow-2xl rounded-lg" />
                     <audio ref={playerRef as any} className="hidden" muted={isMuted} />
                   </>
+                )}
+
+                {/* Overlay de Bloqueio de Autoplay (Celular) */}
+                {autoplayBlocked && (
+                  <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center p-4 text-center">
+                    <div className="bg-[#282828] p-6 rounded-2xl shadow-2xl border border-white/10 flex flex-col items-center max-w-sm">
+                      <VolumeX size={48} className="text-red-400 mb-4" />
+                      <h3 className="text-white font-bold text-lg mb-2">Áudio Bloqueado</h3>
+                      <p className="text-gray-400 text-sm mb-6">O seu navegador bloqueou a reprodução automática.</p>
+                      <button 
+                        onClick={() => {
+                          setAutoplayBlocked(false);
+                          if (playerRef.current) {
+                            playerRef.current.play().catch(() => setAutoplayBlocked(true));
+                          }
+                        }}
+                        className="bg-[#1db954] text-black px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform"
+                      >
+                        <Play fill="currentColor" size={20} /> Liberar Áudio
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 {/* Pré-carregamento invisível (cache-warming) para o próximo pulo ser instantâneo */}
