@@ -695,31 +695,46 @@ export default function Room() {
             {activeTab === 'queue' ? (
               <div className="space-y-3">
                 {queue.map((track, index) => {
+                  const currentIndex = queue.findIndex(t => t.id === playback.currentTrackId);
                   const isCurrent = playback.currentTrackId === track.id;
+                  const isPlayed = currentIndex !== -1 && index < currentIndex;
                   const clickable = isRadialista;
                   return (
                     <div
                       key={track.id}
                       onClick={clickable ? () => handlePlayTrack(track.id) : undefined}
                       title={clickable ? 'Tocar esta música' : undefined}
-                      className={`flex gap-3 items-center p-2 rounded-lg ${isCurrent ? 'bg-white/10' : clickable ? 'hover:bg-white/5 cursor-pointer' : ''}`}
+                      className={`flex gap-3 items-center p-2 rounded-lg transition-all ${
+                        isCurrent 
+                          ? 'bg-[#1db954]/20 border border-[#1db954]/50 scale-[1.02] z-10 shadow-lg' 
+                          : isPlayed
+                            ? 'bg-transparent opacity-40 grayscale hover:opacity-100 hover:grayscale-0'
+                            : clickable 
+                              ? 'bg-white/5 hover:bg-white/10 opacity-80 hover:opacity-100 cursor-pointer' 
+                              : 'bg-white/5 opacity-80'
+                      }`}
                     >
                       <img src={track.thumbnail_url} alt="" className="w-12 h-12 object-cover rounded" />
                       <div className="flex-1 overflow-hidden">
-                        <p className={`text-sm font-medium line-clamp-1 ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>{track.titulo}</p>
+                        <p className={`text-sm font-medium line-clamp-1 ${isCurrent ? 'text-[#1db954]' : isPlayed ? 'text-gray-400 line-through' : 'text-white'}`}>{track.titulo}</p>
                         <p className="text-xs text-gray-400">{track.adicionado_por}</p>
                       </div>
-                      {clickable && (
+                      {clickable && !isCurrent && (
                         <button
-                          onClick={() => handlePlayTrack(track.id)}
+                          onClick={(e) => { e.stopPropagation(); handlePlayTrack(track.id); }}
                           title="Tocar agora"
-                          className={`p-2 rounded-full transition-colors ${isCurrent ? 'text-[#1db954]' : 'text-gray-400 hover:text-white'}`}
+                          className="p-2 rounded-full text-gray-400 hover:text-white transition-colors"
                         >
                           <Play size={16} fill="currentColor" />
                         </button>
                       )}
+                      {isCurrent && (
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#1db954] text-black shrink-0">
+                          <Play size={14} fill="currentColor" />
+                        </div>
+                      )}
                       {isRadialista && (
-                        <div className="flex flex-col gap-0.5">
+                        <div className="flex flex-col gap-0.5 ml-2">
                           <button
                             onClick={(e) => { e.stopPropagation(); moveTrack(track.id, -1); }}
                             disabled={index === 0}

@@ -294,12 +294,8 @@ io.on('connection', (socket) => {
         if (room.history.length > 50) room.history.shift();
         io.to(data.roomId).emit('history_updated', room.history);
         
-        // Remove da fila
-        room.queue.splice(trackIndex, 1);
-        io.to(data.roomId).emit('queue_updated', room.queue);
-        
-        // Pega a próxima música (agora é a do índice 0)
-        const nextTrack = room.queue[0];
+        // Pega a próxima música (avançando o índice)
+        const nextTrack = room.queue[trackIndex + 1];
         if (nextTrack) {
           room.playback = { status: 'playing', currentTrackId: nextTrack.id, timestamp: 0, updated_at: Date.now() };
         } else {
@@ -484,10 +480,7 @@ setInterval(() => {
           if (room.history.length > 50) room.history.shift();
           io.to(room.id).emit('history_updated', room.history);
 
-          room.queue.splice(trackIndex, 1);
-          io.to(room.id).emit('queue_updated', room.queue);
-
-          const nextTrack = room.queue[0];
+          const nextTrack = room.queue[trackIndex + 1];
           if (nextTrack) {
             room.playback = {
               status: 'playing',
