@@ -242,6 +242,8 @@ io.on('connection', (socket) => {
       
       if (!room.playback.currentTrackId) {
         room.playback.currentTrackId = newTrack.id;
+        room.playback.timestamp = 0;
+        room.playback.updated_at = Date.now();
       }
       
       io.to(data.roomId).emit('queue_updated', room.queue);
@@ -389,6 +391,31 @@ io.on('connection', (socket) => {
       }
     }
     console.log(`User disconnected: ${socket.id}`);
+  });
+
+  socket.on('leave_room', (data: { roomId: string }) => {
+    const roomId = data.roomId;
+    if (roomId) {
+      const room = rooms.get(roomId);
+      if (room) {
+        const leaving = room.users.get(socket.id);
+        room.users.delete(socket.id);
+        io.to(roomId).emit('user_left', { socket_id: socket.id, users: Array.from(room.users.values()) });
+
+        // Se o radialista saiu, transfere o papel
+        if (leaving && leaving.id === room.radialista_id) {
+          const next = pickRadialista(room);
+          if (next) {
+            room.radialista_id = next;
+            io.to(roomId).emit('radialista_changed', room.radialista_id);
+          }
+        }
+
+        if (room.users.size === 0 && roomId !== SEEDED_ROOM_ID) {
+          rooms.delete(roomId);
+        }
+      }
+    }
   });
 });
 

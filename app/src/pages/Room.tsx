@@ -186,6 +186,9 @@ export default function Room() {
     setTime(0);
     setDuration(0);
     lastSyncTsRef.current = null;
+    if (playerRef.current) {
+      playerRef.current.currentTime = 0;
+    }
   }, [mediaSrc]);
 
   // O Auto-advance agora é gerenciado pelo Backend na Fase 6.
