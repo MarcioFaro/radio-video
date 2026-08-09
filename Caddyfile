@@ -1,5 +1,5 @@
-# Escutando na porta 80 (http) para qualquer IP ou domínio (Ideal para testes com o IP da VM)
-:80 {
+# Caddy vai gerar os certificados SSL/HTTPS automaticamente
+comunaradio.duckdns.org {
 	# Rota para a API do Node.js (REST e WebSockets)
 	handle /api/* {
 		uri strip_prefix /api
