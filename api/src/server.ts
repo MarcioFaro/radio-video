@@ -75,6 +75,18 @@ fastify.get('/health', async (request, reply) => {
   return { status: 'ok', rooms_count: rooms.size };
 });
 
+fastify.get('/rooms', async (request, reply) => {
+  const activeRooms = Array.from(rooms.values()).map(r => {
+    const radialista = r.radialista_id ? r.users.get(r.radialista_id) : null;
+    return {
+      id: r.id,
+      usersCount: r.users.size,
+      radialistaName: radialista ? radialista.name : null
+    };
+  });
+  return { rooms: activeRooms };
+});
+
 fastify.post('/push/subscribe', async (request, reply) => {
   const { userId, subscription } = request.body as any;
   if (!userId || !subscription) return reply.status(400).send({ error: 'Missing userId or subscription' });

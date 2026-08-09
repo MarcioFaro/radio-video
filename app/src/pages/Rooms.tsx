@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUserStore } from '../store/useUserStore';
 import { useRoomsStore } from '../store/useRoomsStore';
-import { LogOut, Plus, Users, ArrowRight, KeyRound } from 'lucide-react';
+import { LogOut, Plus, Users, ArrowRight, KeyRound, Mic2 } from 'lucide-react';
+
+const BACKEND_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://127.0.0.1:3005';
 
 export default function Rooms() {
   const { user, logout } = useUserStore();
@@ -14,6 +16,22 @@ export default function Rooms() {
   const [newRoomName, setNewRoomName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState(location.state?.joinError === true);
+  const [liveRooms, setLiveRooms] = useState<Record<string, { usersCount: number, radialistaName: string | null }>>({});
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/rooms`)
+      .then(res => res.json())
+      .then(data => {
+        const map: Record<string, any> = {};
+        if (data.rooms) {
+          data.rooms.forEach((r: any) => {
+            map[r.id] = r;
+          });
+        }
+        setLiveRooms(map);
+      })
+      .catch(err => console.error('Error fetching live rooms:', err));
+  }, []);
 
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,9 +144,21 @@ export default function Rooms() {
             >
               <div>
                 <h3 className="font-bold text-lg text-white group-hover:text-[#1db954] transition-colors">{room.name}</h3>
-                <div className="flex items-center gap-2 text-sm text-gray-400 mt-1">
-                  <Users size={14} />
-                  <span>Código: {room.codigo_convite}</span>
+                <div className="flex flex-col gap-1.5 mt-2 text-gray-400 text-sm">
+                  <div className="flex items-center gap-2">
+                    <KeyRound size={14} />
+                    <span>Código: {room.codigo_convite}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Users size={14} className={liveRooms[room.id]?.usersCount > 0 ? 'text-[#1db954]' : ''} />
+                    <span className={liveRooms[room.id]?.usersCount > 0 ? 'text-white font-medium' : ''}>
+                      {liveRooms[room.id]?.usersCount || 0} ouvintes
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mic2 size={14} />
+                    <span>Radialista: {liveRooms[room.id]?.radialistaName || 'Ninguém'}</span>
+                  </div>
                 </div>
               </div>
               <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-[#1db954] group-hover:text-black transition-colors text-gray-400">
