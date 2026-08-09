@@ -1,7 +1,5 @@
-# Substitua seudominio.duckdns.org pelo domínio escolhido no DuckDNS
-# Caddy gerará certificados Let's Encrypt automaticamente para esse domínio.
-
-seudominio.duckdns.org {
+# Escutando na porta 80 (http) para qualquer IP ou domínio (Ideal para testes com o IP da VM)
+:80 {
 	# Rota para a API do Node.js (REST e WebSockets)
 	handle /api/* {
 		uri strip_prefix /api
