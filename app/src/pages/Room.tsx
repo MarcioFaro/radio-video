@@ -375,7 +375,7 @@ export default function Room() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-[#121212]">
+    <div className="h-[100dvh] flex flex-col bg-[#121212]">
       {/* Header */}
       <header className="flex items-center justify-between p-4 bg-[#181818] border-b border-white/5 relative">
         <div className="flex items-center gap-3">
@@ -488,7 +488,7 @@ export default function Room() {
         <div className="flex-1 flex flex-col p-4 lg:p-8 overflow-y-auto">
           
           {/* Video Player Area */}
-          <div className="w-full aspect-video bg-black rounded-xl overflow-hidden relative shadow-2xl group flex items-center justify-center">
+          <div className="w-full aspect-video shrink-0 min-h-[200px] bg-black rounded-xl overflow-hidden relative shadow-2xl group flex items-center justify-center">
             {currentTrack ? (
               <>
                 {/* Imagem de Fundo (Blur) */}
