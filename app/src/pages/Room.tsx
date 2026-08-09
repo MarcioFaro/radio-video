@@ -4,7 +4,7 @@ import { useRoomStore } from '../store/useRoomStore';
 import { useUserStore } from '../store/useUserStore';
 import { useRoomsStore } from '../store/useRoomsStore';
 import AddMusicModal from '../components/AddMusicModal';
-import { Play, Pause, SkipForward, Plus, MessageCircle, Users, ChevronLeft, Send, Video, PictureInPicture2, Mic2, Headphones, ChevronUp, ChevronDown, BellOff, BellRing, Moon, Settings, History, Trash2, RotateCcw, Volume2, VolumeX, AlertTriangle } from 'lucide-react';
+import { Play, Pause, SkipForward, Plus, MessageCircle, Users, ChevronLeft, Send, Video, PictureInPicture2, Mic2, Headphones, ChevronUp, ChevronDown, BellOff, BellRing, Moon, Settings, Trash2, Volume2, VolumeX, AlertTriangle } from 'lucide-react';
 import { getServerTime } from '../data/realtime';
 
 const VAPID_PUBLIC_KEY = 'BD29BGxbHjhrzUQrUHLiAaRJZDhr7fRP0F3PFtPGpCHLaGjEPKi-Ril1heXJwVOa_3GV-exRHHo4y8cROaaZGhY';
@@ -31,8 +31,8 @@ export default function Room() {
   const [previewMode, setPreviewMode] = useState(usersCount > 0);
   
   const { 
-    roomName, queue, history, presence, chat, playback, radialista_id, connected,
-    joinRoom, leaveRoom, setPlaybackStatus, sendMessage, moveTrack, removeTrack, addTrack, seekTo, trackEnded
+    roomName, queue, presence, chat, playback, radialista_id, connected,
+    joinRoom, leaveRoom, setPlaybackStatus, sendMessage, moveTrack, removeTrack, seekTo, trackEnded
   } = useRoomStore();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -757,7 +757,6 @@ export default function Room() {
                     </div>
                   );
                 })}
-              </div>
               </div>
             ) : (
               <div className="space-y-4">
