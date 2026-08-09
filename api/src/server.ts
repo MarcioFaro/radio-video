@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
 import webpush from 'web-push';
-import { rooms, getOrCreateRoom, pickRadialista, User, Track, Room, pushSubscriptions, syncUserToSupabase, supabase } from './store';
+import { rooms, getOrCreateRoom, pickRadialista, User, Track, Room, pushSubscriptions, syncUserToSupabase, supabase, loadRooms, scheduleSave } from './store';
 import { SEEDED_ROOM_ID, SEEDED_ROOM_NAME, SEEDED_ROOM_CODE, SEEDED_SONGS, SeedSong } from './seed';
 
 const vapidKeys = {
@@ -189,8 +189,8 @@ io.on('connection', (socket) => {
     room.users.set(socket.id, newUser);
     syncUserToSupabase(user);
 
-    // Se a sala estava vazia, quem entrou primeiro é o radialista
-    if (room.users.size === 1) {
+    // Se a sala estava vazia ou sem radialista, quem entrar ganha o controle
+    if (!room.radialista_id || room.users.size === 1) {
       room.radialista_id = user.id;
     }
 
@@ -228,8 +228,8 @@ io.on('connection', (socket) => {
       };
       room.chat.push(msg);
       if (room.chat.length > 100) room.chat.shift();
-      
       io.to(roomId).emit('chat_message', msg);
+      scheduleSave();
       
       // Envia Push Notification
       const senderId = Array.from(room.users.values()).find(u => u.socket_id === socket.id)?.id;
@@ -285,6 +285,7 @@ io.on('connection', (socket) => {
       const removedTrack = room.queue[index];
       room.queue.splice(index, 1);
       io.to(data.roomId).emit('queue_updated', room.queue);
+      scheduleSave();
 
       // Se apagou a música que estava tocando, avança para a próxima
       if (room.playback.currentTrackId === data.trackId) {
@@ -306,6 +307,7 @@ io.on('connection', (socket) => {
           };
         }
         io.to(data.roomId).emit('playback_updated', room.playback);
+        scheduleSave();
       }
     }
   });
@@ -324,6 +326,7 @@ io.on('connection', (socket) => {
         };
         // Envia para todos (incluindo o radialista para sincronizar o updated_at)
         io.to(data.roomId).emit('playback_updated', room.playback);
+        scheduleSave();
       }
     }
   });
@@ -341,6 +344,7 @@ io.on('connection', (socket) => {
     room.radialista_id = nextId;
 
     io.to(data.roomId).emit('radialista_changed', room.radialista_id);
+    scheduleSave();
   });
 
   socket.on('seek_playback', (data: { roomId: string, timestamp: number }) => {
@@ -359,6 +363,7 @@ io.on('connection', (socket) => {
     };
     // Envia para todos (incluindo o radialista para sincronizar o updated_at)
     io.to(data.roomId).emit('playback_updated', room.playback);
+    scheduleSave();
   });
 
   socket.on('reorder_queue', (data: { roomId: string, orderedIds: string[] }) => {
@@ -376,6 +381,7 @@ io.on('connection', (socket) => {
 
     room.queue = reordered as Track[];
     io.to(data.roomId).emit('queue_updated', room.queue);
+    scheduleSave();
   });
 
   socket.on('disconnect', () => {
@@ -390,16 +396,11 @@ io.on('connection', (socket) => {
         // Se o radialista saiu, transfere o papel para o membro mais antigo restante
         if (leaving && leaving.id === room.radialista_id) {
           const next = pickRadialista(room);
-          if (next) {
-            room.radialista_id = next;
-            io.to(roomId).emit('radialista_changed', room.radialista_id);
-          }
+          room.radialista_id = next; // Retorna nulo se estiver vazia
+          io.to(roomId).emit('radialista_changed', room.radialista_id);
         }
-
-        // Remove room if empty to save memory (exceto salas seed)
-        if (room.users.size === 0 && roomId !== SEEDED_ROOM_ID) {
-          rooms.delete(roomId);
-        }
+        
+        scheduleSave();
       }
     }
     console.log(`User disconnected: ${socket.id}`);
@@ -417,15 +418,11 @@ io.on('connection', (socket) => {
         // Se o radialista saiu, transfere o papel
         if (leaving && leaving.id === room.radialista_id) {
           const next = pickRadialista(room);
-          if (next) {
-            room.radialista_id = next;
-            io.to(roomId).emit('radialista_changed', room.radialista_id);
-          }
+          room.radialista_id = next; // Retorna nulo se estiver vazia
+          io.to(roomId).emit('radialista_changed', room.radialista_id);
         }
 
-        if (room.users.size === 0 && roomId !== SEEDED_ROOM_ID) {
-          rooms.delete(roomId);
-        }
+        scheduleSave();
       }
     }
   });
@@ -465,6 +462,7 @@ setInterval(() => {
             };
           }
           io.to(room.id).emit('playback_updated', room.playback);
+          scheduleSave();
         }
       }
     }
@@ -473,6 +471,7 @@ setInterval(() => {
 
 const start = async () => {
   try {
+    loadRooms();
     await seedRooms();
     await fastify.listen({ port: 3005, host: '0.0.0.0' });
     console.log(`Backend Realtime rodando na porta 3005`);

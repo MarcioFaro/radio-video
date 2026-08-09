@@ -23,6 +23,8 @@ services:
     restart: unless-stopped
     ports:
       - "3005:3005"
+    volumes:
+      - api_data:/app/data
     
   extractor:
     build:
@@ -37,3 +39,4 @@ volumes:
   caddy_data:
   caddy_config:
   downloads:
+  api_data:

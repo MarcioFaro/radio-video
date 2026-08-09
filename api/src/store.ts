@@ -1,6 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+
 dotenv.config();
+
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const ROOMS_FILE = path.join(DATA_DIR, 'rooms.json');
 
 export interface User {
   id: string;
@@ -49,6 +55,44 @@ export interface Room {
 
 // In-memory store
 export const rooms: Map<string, Room> = new Map();
+
+export function loadRooms() {
+  if (fs.existsSync(ROOMS_FILE)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(ROOMS_FILE, 'utf-8'));
+      for (const [id, roomData] of Object.entries(data)) {
+        const room = roomData as Room;
+        room.users = new Map();
+        room.radialista_id = null; // Reassigned on join
+        rooms.set(id, room);
+      }
+      console.log(`[Persistence] Loaded ${rooms.size} rooms from disk.`);
+    } catch (e) {
+      console.error('[Persistence] Failed to load rooms.json', e);
+    }
+  } else {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+}
+
+let saveTimeout: NodeJS.Timeout | null = null;
+export function scheduleSave() {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    try {
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      const data: Record<string, any> = {};
+      for (const [id, room] of rooms.entries()) {
+        const roomCopy = { ...room };
+        delete (roomCopy as any).users; // We don't save volatile user connections
+        data[id] = roomCopy;
+      }
+      fs.writeFileSync(ROOMS_FILE, JSON.stringify(data), 'utf-8');
+    } catch (e) {
+      console.error('[Persistence] Failed to save rooms.json', e);
+    }
+  }, 5000); // 5 sec debounce
+}
 
 // Push subscriptions: { userId: string, endpoint: string, sub: any, muted_rooms: string[] }
 export const pushSubscriptions: Array<{ userId: string; endpoint: string; sub: any; muted_rooms: string[] }> = [];
