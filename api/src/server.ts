@@ -331,14 +331,10 @@ io.on('connection', (socket) => {
         // Marca como histórico no Supabase
         updateTrackStatusInSupabase(track.id, 'historico').catch(console.error);
         
-        // Pega a próxima música
-        const nextTrack = room.queue[trackIndex + 1];
-        if (nextTrack) {
-          room.playback = { status: 'playing', currentTrackId: nextTrack.id, timestamp: 0, updated_at: Date.now() };
-        } else {
-          room.playback = { status: 'paused', currentTrackId: null, timestamp: 0, updated_at: Date.now() };
-        }
-        
+        // Pega a próxima música (volta pra primeira se era a última da fila)
+        const nextTrack = room.queue[trackIndex + 1] || room.queue[0];
+        room.playback = { status: 'playing', currentTrackId: nextTrack.id, timestamp: 0, updated_at: Date.now() };
+
         io.to(data.roomId).emit('playback_updated', room.playback);
         scheduleSave();
       }
@@ -510,22 +506,14 @@ setInterval(() => {
           if (room.history.length > 50) room.history.shift();
           io.to(room.id).emit('history_updated', room.history);
 
-          const nextTrack = room.queue[trackIndex + 1];
-          if (nextTrack) {
-            room.playback = {
-              status: 'playing',
-              currentTrackId: nextTrack.id,
-              timestamp: 0,
-              updated_at: now
-            };
-          } else {
-            room.playback = {
-              status: 'paused',
-              currentTrackId: null,
-              timestamp: 0,
-              updated_at: now
-            };
-          }
+          // Volta pra primeira musica se era a ultima da fila
+          const nextTrack = room.queue[trackIndex + 1] || room.queue[0];
+          room.playback = {
+            status: 'playing',
+            currentTrackId: nextTrack.id,
+            timestamp: 0,
+            updated_at: now
+          };
           io.to(room.id).emit('playback_updated', room.playback);
           scheduleSave();
         }
