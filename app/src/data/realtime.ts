@@ -4,6 +4,7 @@ import * as queueData from './queue';
 import * as chatData from './chat';
 import * as presenceData from './presence';
 import * as playbackData from './playback';
+import * as historyData from './history';
 
 interface ServerUser extends User { socket_id?: string; entrou_em?: number }
 
@@ -13,6 +14,7 @@ interface ServerRoomState {
   codigo_convite: string;
   radialista_id: string | null;
   queue: Track[];
+  history: Track[];
   chat: ChatMessage[];
   playback: PlaybackState;
   users: ServerUser[];
@@ -28,6 +30,11 @@ const listenersByRoom = new Map<string, Set<() => void>>();
 
 let currentRoomId: string | null = null;
 let wired = false;
+let serverTimeOffset = 0;
+
+export function getServerTime(): number {
+  return Date.now() + serverTimeOffset;
+}
 
 function notifyRoom(roomId: string): void {
   const set = listenersByRoom.get(roomId);
@@ -37,6 +44,7 @@ function notifyRoom(roomId: string): void {
 function applyServerState(roomId: string, state: ServerRoomState): void {
   metaByRoom.set(roomId, { name: state.name, codigo_convite: state.codigo_convite });
   queueData.applyQueue(roomId, state.queue);
+  historyData.applyHistory(roomId, state.history);
   chatData.applyMessages(roomId, state.chat);
   presenceData.applyPresence(roomId, state.users, state.radialista_id);
   playbackData.applyPlayback(roomId, state.playback);
@@ -56,6 +64,12 @@ function wireSocket(): void {
   socket.on('queue_updated', (queue: Track[]) => {
     if (!currentRoomId) return;
     queueData.applyQueue(currentRoomId, queue);
+    notifyRoom(currentRoomId);
+  });
+
+  socket.on('history_updated', (history: Track[]) => {
+    if (!currentRoomId) return;
+    historyData.applyHistory(currentRoomId, history);
     notifyRoom(currentRoomId);
   });
 
@@ -100,6 +114,9 @@ export function ensureConnected(timeoutMs = 1500): Promise<boolean> {
     const timer = setTimeout(() => resolve(socket.connected), timeoutMs);
     socket.once('connect', () => {
       clearTimeout(timer);
+      socket.emit('get_time', (serverTs: number) => {
+        serverTimeOffset = serverTs - Date.now();
+      });
       resolve(true);
     });
     socket.once('connect_error', () => {
@@ -114,10 +131,16 @@ export function isConnected(): boolean {
 }
 
 export function subscribeStatus(cb: () => void): () => void {
-  socket.on('connect', cb);
+  const onConnect = () => {
+    socket.emit('get_time', (serverTs: number) => {
+      serverTimeOffset = serverTs - Date.now();
+    });
+    cb();
+  };
+  socket.on('connect', onConnect);
   socket.on('disconnect', cb);
   return () => {
-    socket.off('connect', cb);
+    socket.off('connect', onConnect);
     socket.off('disconnect', cb);
   };
 }
@@ -126,6 +149,7 @@ export function subscribeRoom(roomId: string, cb: () => void): () => void {
   wireSocket();
   const unsubs = [
     queueData.subscribeQueue(roomId, cb),
+    historyData.subscribeHistory(roomId, cb),
     chatData.subscribeChat(roomId, cb),
     presenceData.subscribePresence(roomId, cb),
     playbackData.subscribePlayback(roomId, cb),
@@ -171,6 +195,24 @@ export function setPlayback(roomId: string, status: PlaybackState['status'], cur
   playbackData.applyPlayback(roomId, { status, currentTrackId, timestamp });
 }
 
+export function seekPlayback(roomId: string, timestamp: number): void {
+  socket.emit('seek_playback', { roomId, timestamp });
+  playbackData.setPlaybackTime(roomId, timestamp);
+}
+
+export function reorderQueue(roomId: string, orderedIds: string[]): void {
+  const byId = new Map(queueData.getQueue(roomId).map((t) => [t.id, t]));
+  const reordered = orderedIds.map((id) => byId.get(id)).filter((t): t is Track => Boolean(t));
+  if (reordered.length === orderedIds.length) {
+    queueData.applyQueue(roomId, reordered);
+  }
+  socket.emit('reorder_queue', { roomId, orderedIds });
+}
+
 export function forceRadialista(roomId: string): void {
   socket.emit('force_radialista', { roomId });
+}
+
+export function removeTrack(roomId: string, trackId: string): void {
+  socket.emit('remove_track', { roomId, trackId });
 }

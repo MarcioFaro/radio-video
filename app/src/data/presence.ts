@@ -48,13 +48,14 @@ export function getRadialista(roomId: string): string | null {
 export function join(roomId: string, user: User): void {
   const users = getPresenceRaw(roomId);
   if (users.length === 0) {
+    const now = Date.now();
     users.push(
-      { id: 'mock-marcos', name: 'Marcos' },
-      { id: 'mock-pri', name: 'Pri' }
+      { id: 'mock-marcos', name: 'Marcos', entrou_em: now - 60000 },
+      { id: 'mock-pri', name: 'Pri', entrou_em: now - 30000 }
     );
   }
   if (!users.some((u) => u.id === user.id)) {
-    users.push(user);
+    users.push({ ...user, entrou_em: user.entrou_em ?? Date.now() });
     presenceByRoom.set(roomId, [...users]);
   }
   if (getRadialista(roomId) === null) {
@@ -73,7 +74,7 @@ export function leave(roomId: string, userId: string): void {
 }
 
 export function simulateRadialistaChange(roomId: string): string | null {
-  const users = getPresenceRaw(roomId);
+  const users = [...getPresenceRaw(roomId)].sort((a, b) => (a.entrou_em ?? 0) - (b.entrou_em ?? 0));
   if (users.length === 0) return null;
   const current = getRadialista(roomId);
   const index = users.findIndex((u) => u.id === current);

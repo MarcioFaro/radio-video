@@ -35,7 +35,17 @@ export function clearQueue(roomId: string): void {
   queueByRoom.delete(roomId);
 }
 
-const EXTRACTOR_URL = 'http://127.0.0.1:8000/extract';
+export function moveTrack(roomId: string, trackId: string, direction: -1 | 1): void {
+  const queue = getQueue(roomId);
+  const from = queue.findIndex((t) => t.id === trackId);
+  const to = from + direction;
+  if (from < 0 || to < 0 || to >= queue.length) return;
+  const [track] = queue.splice(from, 1);
+  queue.splice(to, 0, track);
+  notify(subKey(roomId));
+}
+
+const EXTRACTOR_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/extract` : 'http://127.0.0.1:8000/extract';
 
 const EXTRACTOR_ERRORS: Record<string, string> = {
   private_removed: 'Vídeo removido ou indisponível.',
@@ -90,6 +100,7 @@ export async function previewTrack(url: string): Promise<TrackPreview> {
       thumbnail_url: data.thumbnail_url,
       duracao_seg: data.duracao_seg,
       audio_url: data.audio_url,
+      video_url: data.video_url,
     };
   }
 

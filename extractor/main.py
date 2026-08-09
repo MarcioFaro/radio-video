@@ -174,14 +174,26 @@ def extract_with_ytdlp(url: str) -> dict:
 
 
 def best_video_url(info: dict) -> Optional[str]:
-    best = None
+    # Rádio é focada em som: o vídeo é secundário (minimap/visual) → menor
+    # resolução possível. Prefere progressivo (vídeo + áudio) para tocar com som;
+    # sem progressivo, cai para o video-only de menor resolução.
+    progressive = None
+    video_only = None
     for f in info.get("formats", []):
         vcodec = f.get("vcodec")
-        if not vcodec or vcodec == "none" or not f.get("url"):
-            continue
         height = f.get("height") or 0
-        if best is None or height > best[0]:
-            best = (height, f["url"])
+        if not vcodec or vcodec == "none" or not f.get("url") or height <= 0:
+            continue
+        acodec = f.get("acodec")
+        has_audio = bool(acodec) and acodec != "none"
+        target = progressive if has_audio else video_only
+        if target is None or height < target[0]:
+            target = (height, f["url"])
+        if has_audio:
+            progressive = target
+        else:
+            video_only = target
+    best = progressive or video_only
     return best[1] if best else None
 
 

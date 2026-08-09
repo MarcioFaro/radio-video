@@ -2,6 +2,7 @@ export interface User {
   id: string;
   name: string;
   avatar_url?: string;
+  entrou_em?: number;
 }
 
 export interface Room {
@@ -19,6 +20,7 @@ export interface Track {
   thumbnail_url: string;
   duracao_seg: number;
   audio_url?: string;
+  video_url?: string;
   adicionado_por: string;
 }
 
@@ -28,6 +30,7 @@ export interface TrackPreview {
   thumbnail_url: string;
   duracao_seg: number;
   audio_url: string;
+  video_url?: string;
 }
 
 export interface ChatMessage {
@@ -41,4 +44,5 @@ export interface PlaybackState {
   status: 'playing' | 'paused';
   currentTrackId: string | null;
   timestamp: number;
+  updated_at: number;
 }

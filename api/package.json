@@ -9,8 +9,12 @@
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
+    "@supabase/supabase-js": "^2.112.2",
+    "@types/web-push": "^3.6.4",
+    "dotenv": "^17.4.2",
     "fastify": "^4.26.2",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

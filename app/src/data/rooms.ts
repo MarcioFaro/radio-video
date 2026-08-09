@@ -3,6 +3,7 @@ import type { Room } from './types';
 const rooms: Room[] = [
   { id: '1', name: 'Rádio Rock', owner_id: 'owner1', codigo_convite: 'ROCK123', criado_em: new Date().toISOString() },
   { id: '2', name: 'Lofi Study', owner_id: 'owner2', codigo_convite: 'LOFI456', criado_em: new Date().toISOString() },
+  { id: 'comuna-roots', name: 'Comuna Radio Roots', owner_id: 'seed', codigo_convite: 'ROOTS25', criado_em: new Date().toISOString() },
 ];
 
 export function listRooms(): Room[] {

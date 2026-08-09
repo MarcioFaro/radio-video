@@ -45,6 +45,7 @@ export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
         thumbnail_url: preview.thumbnail_url,
         duracao_seg: preview.duracao_seg,
         audio_url: preview.audio_url,
+        video_url: preview.video_url,
         adicionado_por: user.name
       });
       setUrl('');

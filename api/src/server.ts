@@ -1,7 +1,67 @@
 import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
-import { rooms, getOrCreateRoom, pickRadialista, User, Track } from './store';
+import webpush from 'web-push';
+import { rooms, getOrCreateRoom, pickRadialista, User, Track, Room, pushSubscriptions, syncUserToSupabase, supabase } from './store';
+import { SEEDED_ROOM_ID, SEEDED_ROOM_NAME, SEEDED_ROOM_CODE, SEEDED_SONGS, SeedSong } from './seed';
+
+const vapidKeys = {
+  publicKey: 'BD29BGxbHjhrzUQrUHLiAaRJZDhr7fRP0F3PFtPGpCHLaGjEPKi-Ril1heXJwVOa_3GV-exRHHo4y8cROaaZGhY',
+  privateKey: '-oE_Pn-NNF6O38asWA_TOVEzPa4U4EsgM4iZ3aZz6gg'
+};
+
+webpush.setVapidDetails(
+  'mailto:contato@radiovideo.local',
+  vapidKeys.publicKey,
+  vapidKeys.privateKey
+);
+
+const EXTRACTOR_URL = 'http://127.0.0.1:8000/extract';
+
+async function resolveSeedTrack(song: SeedSong): Promise<Track> {
+  const track: Track = {
+    id: song.youtube_video_id,
+    youtube_video_id: song.youtube_video_id,
+    titulo: song.titulo,
+    thumbnail_url: `https://i.ytimg.com/vi/${song.youtube_video_id}/maxresdefault.jpg`,
+    duracao_seg: song.duracao_seg,
+    adicionado_por: 'Sistema',
+  };
+  try {
+    const res = await fetch(EXTRACTOR_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${song.youtube_video_id}` }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.thumbnail_url) track.thumbnail_url = data.thumbnail_url;
+      if (data.duracao_seg) track.duracao_seg = data.duracao_seg;
+      if (data.audio_url) track.audio_url = data.audio_url;
+      if (data.video_url) track.video_url = data.video_url;
+    }
+  } catch {
+    // Segue com metadado apenas se o extrator estiver fora.
+  }
+  return track;
+}
+
+async function seedRooms(): Promise<void> {
+  if (rooms.has(SEEDED_ROOM_ID)) return;
+  const queue = await Promise.all(SEEDED_SONGS.map(resolveSeedTrack));
+  const seeded: Room = {
+    id: SEEDED_ROOM_ID,
+    name: SEEDED_ROOM_NAME,
+    codigo_convite: SEEDED_ROOM_CODE,
+    radialista_id: null,
+    users: new Map(),
+    queue,
+    chat: [],
+    playback: { status: 'paused', currentTrackId: queue[0]?.id ?? null, timestamp: 0, updated_at: Date.now() },
+  };
+  rooms.set(SEEDED_ROOM_ID, seeded);
+  console.log(`[seed] Rádio "${SEEDED_ROOM_NAME}" criada com ${queue.length} músicas.`);
+}
 
 const fastify = Fastify({ logger: true });
 
@@ -14,6 +74,82 @@ fastify.get('/health', async (request, reply) => {
   return { status: 'ok', rooms_count: rooms.size };
 });
 
+fastify.post('/push/subscribe', async (request, reply) => {
+  const { userId, subscription } = request.body as any;
+  if (!userId || !subscription) return reply.status(400).send({ error: 'Missing userId or subscription' });
+  
+  // Evitar duplicatas
+  const existingIndex = pushSubscriptions.findIndex(s => s.endpoint === subscription.endpoint);
+  if (existingIndex >= 0) {
+    pushSubscriptions[existingIndex] = { ...pushSubscriptions[existingIndex], userId, endpoint: subscription.endpoint, sub: subscription };
+  } else {
+    pushSubscriptions.push({ userId, endpoint: subscription.endpoint, sub: subscription, muted_rooms: [] });
+  }
+
+  if (supabase) {
+    supabase.from('push_subscriptions').upsert({
+      endpoint: subscription.endpoint,
+      user_id: userId,
+      p256dh: subscription.keys.p256dh,
+      auth: subscription.keys.auth,
+    }).catch(console.error);
+  }
+
+  return { status: 'ok' };
+});
+
+fastify.post('/push/settings', async (request, reply) => {
+  const { endpoint, roomId, muted } = request.body as any;
+  if (!endpoint || !roomId) return reply.status(400).send({ error: 'Missing endpoint or roomId' });
+  
+  const sub = pushSubscriptions.find(s => s.endpoint === endpoint);
+  if (sub) {
+    if (muted && !sub.muted_rooms.includes(roomId)) {
+      sub.muted_rooms.push(roomId);
+    } else if (!muted) {
+      sub.muted_rooms = sub.muted_rooms.filter(id => id !== roomId);
+    }
+  }
+  return { status: 'ok' };
+});
+
+fastify.post('/push/unsubscribe', async (request, reply) => {
+  const { endpoint } = request.body as any;
+  if (!endpoint) return reply.status(400).send({ error: 'Missing endpoint' });
+  
+  const index = pushSubscriptions.findIndex(s => s.endpoint === endpoint);
+  if (index >= 0) pushSubscriptions.splice(index, 1);
+  return { status: 'ok' };
+});
+
+// Função auxiliar para enviar push
+async function sendPushToRoom(roomId: string, senderId: string, payload: any) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+  
+  const targetUserIds = Array.from(room.users.values())
+    .filter(u => u.id !== senderId)
+    .map(u => u.id);
+    
+  // Apenas inscritos que não mutaram a sala
+  const subs = pushSubscriptions.filter(s => targetUserIds.includes(s.userId) && !s.muted_rooms.includes(roomId));
+  
+  const payloadStr = JSON.stringify(payload);
+  
+  for (let i = subs.length - 1; i >= 0; i--) {
+    try {
+      await webpush.sendNotification(subs[i].sub, payloadStr);
+    } catch (err: any) {
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        // Inscrição expirou ou foi revogada, remover
+        pushSubscriptions.splice(i, 1);
+      } else {
+        console.error('Erro ao enviar push:', err);
+      }
+    }
+  }
+}
+
 const io = new Server(fastify.server, {
   cors: {
     origin: "*",
@@ -24,6 +160,12 @@ const io = new Server(fastify.server, {
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
+  socket.on('get_time', (callback) => {
+    if (typeof callback === 'function') {
+      callback(Date.now());
+    }
+  });
+
   socket.on('join_room', (data: { roomId: string, roomName: string, user: { id: string, name: string, avatar_url?: string } }) => {
     const { roomId, roomName, user } = data;
     socket.join(roomId);
@@ -32,6 +174,7 @@ io.on('connection', (socket) => {
 
     const newUser: User = { ...user, socket_id: socket.id, entrou_em: Date.now() };
     room.users.set(socket.id, newUser);
+    syncUserToSupabase(user);
 
     // Se a sala estava vazia, quem entrou primeiro é o radialista
     if (room.users.size === 1) {
@@ -39,13 +182,14 @@ io.on('connection', (socket) => {
     }
 
     // Send full current state to the joining user
-    socket.emit('sync_state', {
+      socket.emit('sync_state', {
       room: {
         id: room.id,
         name: room.name,
         codigo_convite: room.codigo_convite,
         radialista_id: room.radialista_id,
         queue: room.queue,
+        history: room.history,
         chat: room.chat,
         playback: room.playback,
         users: Array.from(room.users.values())
@@ -73,6 +217,16 @@ io.on('connection', (socket) => {
       if (room.chat.length > 100) room.chat.shift();
       
       io.to(roomId).emit('chat_message', msg);
+      
+      // Envia Push Notification
+      const senderId = Array.from(room.users.values()).find(u => u.socket_id === socket.id)?.id;
+      if (senderId) {
+        sendPushToRoom(roomId, senderId, {
+          title: `Nova mensagem na ${room.name}`,
+          body: `${userName}: ${text}`,
+          url: `/room/${roomId}`
+        }).catch(console.error);
+      }
     }
   });
 
@@ -91,6 +245,53 @@ io.on('connection', (socket) => {
       
       io.to(data.roomId).emit('queue_updated', room.queue);
       io.to(data.roomId).emit('playback_updated', room.playback);
+      
+      // Envia Push Notification
+      const senderId = Array.from(room.users.values()).find(u => u.socket_id === socket.id)?.id;
+      if (senderId) {
+        sendPushToRoom(data.roomId, senderId, {
+          title: `Nova música adicionada`,
+          body: `${newTrack.titulo}`,
+          url: `/room/${data.roomId}`
+        }).catch(console.error);
+      }
+    }
+  });
+
+  socket.on('remove_track', (data: { roomId: string, trackId: string }) => {
+    const room = rooms.get(data.roomId);
+    if (!room) return;
+
+    const user = room.users.get(socket.id);
+    if (!user || user.id !== room.radialista_id) return;
+
+    const index = room.queue.findIndex(t => t.id === data.trackId);
+    if (index >= 0) {
+      const removedTrack = room.queue[index];
+      room.queue.splice(index, 1);
+      io.to(data.roomId).emit('queue_updated', room.queue);
+
+      // Se apagou a música que estava tocando, avança para a próxima
+      if (room.playback.currentTrackId === data.trackId) {
+        const nextTrack = room.queue[index]; // o elemento que estava na próxima posição desceu para `index`
+        if (nextTrack) {
+          room.playback = {
+            status: 'playing',
+            currentTrackId: nextTrack.id,
+            timestamp: 0,
+            updated_at: Date.now()
+          };
+        } else {
+          // Fila acabou
+          room.playback = {
+            status: 'paused',
+            currentTrackId: null,
+            timestamp: 0,
+            updated_at: Date.now()
+          };
+        }
+        io.to(data.roomId).emit('playback_updated', room.playback);
+      }
     }
   });
 
@@ -103,10 +304,11 @@ io.on('connection', (socket) => {
         room.playback = {
           status: data.status,
           currentTrackId: data.currentTrackId,
-          timestamp: data.timestamp
+          timestamp: data.timestamp,
+          updated_at: Date.now()
         };
-        // Envia para todos, exceto quem disparou
-        socket.to(data.roomId).emit('playback_updated', room.playback);
+        // Envia para todos (incluindo o radialista para sincronizar o updated_at)
+        io.to(data.roomId).emit('playback_updated', room.playback);
       }
     }
   });
@@ -115,12 +317,50 @@ io.on('connection', (socket) => {
     const room = rooms.get(data.roomId);
     if (!room || room.users.size === 0) return;
 
-    const ids = Array.from(room.users.values()).map((u) => u.id);
+    const ids = Array.from(room.users.values())
+      .sort((a, b) => a.entrou_em - b.entrou_em)
+      .map((u) => u.id);
+    if (!room.radialista_id) return;
     const currentIndex = ids.indexOf(room.radialista_id);
     const nextId = ids[(currentIndex + 1) % ids.length];
     room.radialista_id = nextId;
 
     io.to(data.roomId).emit('radialista_changed', room.radialista_id);
+  });
+
+  socket.on('seek_playback', (data: { roomId: string, timestamp: number }) => {
+    const room = rooms.get(data.roomId);
+    if (!room) return;
+
+    const user = room.users.get(socket.id);
+    if (!user || user.id !== room.radialista_id) return;
+
+    // Atualiza só o timestamp, mantém status/faixa
+    room.playback = {
+      status: room.playback.status,
+      currentTrackId: room.playback.currentTrackId,
+      timestamp: data.timestamp,
+      updated_at: Date.now()
+    };
+    // Envia para todos (incluindo o radialista para sincronizar o updated_at)
+    io.to(data.roomId).emit('playback_updated', room.playback);
+  });
+
+  socket.on('reorder_queue', (data: { roomId: string, orderedIds: string[] }) => {
+    const room = rooms.get(data.roomId);
+    if (!room) return;
+
+    const user = room.users.get(socket.id);
+    if (!user || user.id !== room.radialista_id) return;
+
+    if (!Array.isArray(data.orderedIds)) return;
+    const byId = new Map(room.queue.map((t) => [t.id, t]));
+    if (data.orderedIds.length !== room.queue.length) return;
+    const reordered = data.orderedIds.map((id) => byId.get(id));
+    if (reordered.some((t) => !t)) return;
+
+    room.queue = reordered as Track[];
+    io.to(data.roomId).emit('queue_updated', room.queue);
   });
 
   socket.on('disconnect', () => {
@@ -141,8 +381,8 @@ io.on('connection', (socket) => {
           }
         }
 
-        // Remove room if empty to save memory
-        if (room.users.size === 0) {
+        // Remove room if empty to save memory (exceto salas seed)
+        if (room.users.size === 0 && roomId !== SEEDED_ROOM_ID) {
           rooms.delete(roomId);
         }
       }
@@ -151,8 +391,49 @@ io.on('connection', (socket) => {
   });
 });
 
+setInterval(() => {
+  const now = Date.now();
+  for (const room of rooms.values()) {
+    if (room.playback.status === 'playing' && room.playback.currentTrackId) {
+      const trackIndex = room.queue.findIndex(t => t.id === room.playback.currentTrackId);
+      if (trackIndex >= 0) {
+        const track = room.queue[trackIndex];
+        const expectedTimeSec = room.playback.timestamp + (now - room.playback.updated_at) / 1000;
+        
+        // Se a música acabou
+        if (expectedTimeSec >= track.duracao_seg) {
+          // Move para o histórico
+          room.history.push(track);
+          if (room.history.length > 50) room.history.shift(); // limite de 50
+          io.to(room.id).emit('history_updated', room.history);
+
+          const nextTrack = room.queue[trackIndex + 1];
+          if (nextTrack) {
+            room.playback = {
+              status: 'playing',
+              currentTrackId: nextTrack.id,
+              timestamp: 0,
+              updated_at: now
+            };
+          } else {
+            // Fila acabou
+            room.playback = {
+              status: 'paused',
+              currentTrackId: track.id,
+              timestamp: 0,
+              updated_at: now
+            };
+          }
+          io.to(room.id).emit('playback_updated', room.playback);
+        }
+      }
+    }
+  }
+}, 1000);
+
 const start = async () => {
   try {
+    await seedRooms();
     await fastify.listen({ port: 3005, host: '0.0.0.0' });
     console.log(`Backend Realtime rodando na porta 3005`);
   } catch (err) {

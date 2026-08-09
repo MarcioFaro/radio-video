@@ -1,0 +1,20 @@
+
+> radio-video-api@1.0.0 dev
+> ts-node src/server.ts
+
+[seed] Rádio "Comuna Radio Roots" criada com 2 músicas.
+{"level":30,"time":1786211167707,"pid":14696,"hostname":"DESKTOP-PVRB9EF","msg":"Server listening at http://0.0.0.0:3005"}
+Backend Realtime rodando na porta 3005
+User connected: yBaIryPePuH_Y4qOAAAB
+{"level":30,"time":1786211179173,"pid":14696,"hostname":"DESKTOP-PVRB9EF","reqId":"req-1","req":{"method":"GET","url":"/health","hostname":"127.0.0.1:3005","remoteAddress":"127.0.0.1","remotePort":53176},"msg":"incoming request"}
+{"level":30,"time":1786211179174,"pid":14696,"hostname":"DESKTOP-PVRB9EF","reqId":"req-1","res":{"statusCode":200},"responseTime":1.1448000073432922,"msg":"request completed"}
+User connected: MICFbpEcM6GRoWOQAAAD
+User disconnected: MICFbpEcM6GRoWOQAAAD
+User disconnected: yBaIryPePuH_Y4qOAAAB
+User connected: rtSYedocRXVqU1KKAAAF
+User disconnected: rtSYedocRXVqU1KKAAAF
+User connected: VqZYdTtR6FPpFy4TAAAH
+User disconnected: VqZYdTtR6FPpFy4TAAAH
+User connected: LZXf5vicN18FDysJAAAJ
+User disconnected: LZXf5vicN18FDysJAAAJ
+User connected: tCGm8cDuVx01FURVAAAL

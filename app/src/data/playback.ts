@@ -16,7 +16,7 @@ export function subscribePlayback(roomId: string, cb: () => void): () => void {
 
 export function getPlayback(roomId: string): PlaybackState {
   if (!playbackByRoom.has(roomId)) {
-    playbackByRoom.set(roomId, { status: 'paused', currentTrackId: null, timestamp: 0 });
+    playbackByRoom.set(roomId, { status: 'paused', currentTrackId: null, timestamp: 0, updated_at: Date.now() });
   }
   return playbackByRoom.get(roomId)!;
 }
@@ -27,6 +27,12 @@ export function setPlayback(
   currentTrackId: string | null,
   timestamp: number
 ): void {
-  playbackByRoom.set(roomId, { status, currentTrackId, timestamp });
+  playbackByRoom.set(roomId, { status, currentTrackId, timestamp, updated_at: Date.now() });
+  notify(subKey(roomId));
+}
+
+export function setPlaybackTime(roomId: string, timestamp: number): void {
+  const current = getPlayback(roomId);
+  playbackByRoom.set(roomId, { ...current, timestamp, updated_at: Date.now() });
   notify(subKey(roomId));
 }

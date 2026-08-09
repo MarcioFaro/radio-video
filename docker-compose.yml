@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - extractor
+
+  api:
+    build:
+      context: ./api
+    restart: unless-stopped
+    env_file:
+      - ./api/.env
+    ports:
+      - "3005:3005"
+    volumes:
+      - ./api:/app
+      - /app/node_modules
+    
+  extractor:
+    build:
+      context: ./extractor
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./extractor:/app
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,25 @@
+# Substitua seudominio.duckdns.org pelo domínio escolhido no DuckDNS
+# Caddy gerará certificados Let's Encrypt automaticamente para esse domínio.
+
+seudominio.duckdns.org {
+	# Rota para a API do Node.js (REST e WebSockets)
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy api:3005
+	}
+	
+	# Rota para o Socket.io (Node.js)
+	handle /socket.io/* {
+		reverse_proxy api:3005
+	}
+
+	# Rota para o Extrator Python
+	handle /extract* {
+		reverse_proxy extractor:8000
+	}
+
+	# (Opcional) Resposta padrão caso alguém acesse a raiz
+	handle {
+		respond "Radio Video API is running." 200
+	}
+}
