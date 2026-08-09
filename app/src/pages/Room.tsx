@@ -686,9 +686,7 @@ export default function Room() {
             {activeTab === 'queue' ? (
               <div className="space-y-3">
                 {queue.map((track, index) => {
-                  const currentIndex = queue.findIndex(t => t.id === playback.currentTrackId);
                   const isCurrent = playback.currentTrackId === track.id;
-                  const isPlayed = currentIndex !== -1 && index < currentIndex;
                   const clickable = isRadialista;
                   return (
                     <div
@@ -696,18 +694,16 @@ export default function Room() {
                       onClick={clickable ? () => handlePlayTrack(track.id) : undefined}
                       title={clickable ? 'Tocar esta música' : undefined}
                       className={`flex gap-3 items-center p-2 rounded-lg transition-all ${
-                        isCurrent 
-                          ? 'bg-[#1db954]/20 border border-[#1db954]/50 scale-[1.02] z-10 shadow-lg' 
-                          : isPlayed
-                            ? 'bg-transparent opacity-40 grayscale hover:opacity-100 hover:grayscale-0'
-                            : clickable 
-                              ? 'bg-white/5 hover:bg-white/10 opacity-80 hover:opacity-100 cursor-pointer' 
-                              : 'bg-white/5 opacity-80'
+                        isCurrent
+                          ? 'bg-[#1db954]/20 border border-[#1db954]/50 scale-[1.02] z-10 shadow-lg'
+                          : clickable
+                            ? 'bg-white/5 hover:bg-white/10 opacity-80 hover:opacity-100 cursor-pointer'
+                            : 'bg-white/5 opacity-80'
                       }`}
                     >
                       <img src={track.thumbnail_url} alt="" className="w-12 h-12 object-cover rounded" />
                       <div className="flex-1 overflow-hidden">
-                        <p className={`text-sm font-medium line-clamp-1 ${isCurrent ? 'text-[#1db954]' : isPlayed ? 'text-gray-400 line-through' : 'text-white'}`}>{track.titulo}</p>
+                        <p className={`text-sm font-medium line-clamp-1 ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>{track.titulo}</p>
                         <p className="text-xs text-gray-400">{track.adicionado_por}</p>
                       </div>
                       {clickable && !isCurrent && (
