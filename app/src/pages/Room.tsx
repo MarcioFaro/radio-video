@@ -250,8 +250,31 @@ export default function Room() {
           artist: 'Comuna-Radio'
         });
       }
+      navigator.mediaSession.playbackState = playback.status === 'playing' ? 'playing' : 'paused';
     }
-  }, [currentTrack, roomName]);
+  }, [currentTrack, roomName, playback.status]);
+
+  // Handlers do Media Session: permitem que o SO mostre um mini-player
+  // (lockscreen/notificação) e continue a reprodução com a aba em segundo plano.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+
+    navigator.mediaSession.setActionHandler('play', () => {
+      if (playback.status !== 'playing') togglePlay();
+    });
+    navigator.mediaSession.setActionHandler('pause', () => {
+      if (playback.status === 'playing') togglePlay();
+    });
+    navigator.mediaSession.setActionHandler('nexttrack', isRadialista && currentTrack ? () => handleNextTrack() : null);
+    navigator.mediaSession.setActionHandler('previoustrack', null);
+    navigator.mediaSession.setActionHandler('stop', null);
+
+    return () => {
+      navigator.mediaSession.setActionHandler('play', null);
+      navigator.mediaSession.setActionHandler('pause', null);
+      navigator.mediaSession.setActionHandler('nexttrack', null);
+    };
+  }, [playback.status, isRadialista, currentTrack, presence.length]);
 
   if (!user) return <div className="p-8 text-center text-white">Carregando...</div>;
 
