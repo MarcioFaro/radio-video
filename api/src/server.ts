@@ -56,6 +56,7 @@ async function seedRooms(): Promise<void> {
     radialista_id: null,
     users: new Map(),
     queue,
+    history: [],
     chat: [],
     playback: { status: 'paused', currentTrackId: queue[0]?.id ?? null, timestamp: 0, updated_at: Date.now() },
   };
@@ -92,7 +93,7 @@ fastify.post('/push/subscribe', async (request, reply) => {
       user_id: userId,
       p256dh: subscription.keys.p256dh,
       auth: subscription.keys.auth,
-    }).catch(console.error);
+    }).then(res => { if(res.error) console.error(res.error) });
   }
 
   return { status: 'ok' };

@@ -79,7 +79,7 @@ export function getOrCreateRoom(roomId: string, roomName: string, radialistaId: 
     });
 
     if (supabase) {
-      supabase.from('rooms').upsert({ id: roomId, name: roomName, codigo_convite: rooms.get(roomId)!.codigo_convite }).catch(console.error);
+      supabase.from('rooms').upsert({ id: roomId, name: roomName, codigo_convite: rooms.get(roomId)!.codigo_convite }).then(res => { if(res.error) console.error(res.error) });
     }
   }
   return rooms.get(roomId)!;
@@ -87,7 +87,7 @@ export function getOrCreateRoom(roomId: string, roomName: string, radialistaId: 
 
 export function syncUserToSupabase(user: { id: string; name: string }) {
   if (supabase) {
-    supabase.from('users').upsert({ id: user.id, name: user.name }).catch(console.error);
+    supabase.from('users').upsert({ id: user.id, name: user.name }).then(res => { if(res.error) console.error(res.error) });
   }
 }
 
