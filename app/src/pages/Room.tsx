@@ -375,10 +375,7 @@ export default function Room() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-[#121212] overflow-hidden relative">
-      {/* Banner */}
-      <div className="w-full h-1.5 shrink-0 z-20">
-        <img src="/rodape.png" alt="" className="w-full h-full object-cover" />
-      </div>
+
       
       {/* Preview Overlay */}
       {previewMode && (

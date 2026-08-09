@@ -99,9 +99,7 @@ export default function Rooms() {
 
   return (
     <div className="min-h-screen bg-[#121212] flex flex-col">
-      <div className="w-full h-1.5 shrink-0">
-        <img src="/rodape.png" alt="" className="w-full h-full object-cover" />
-      </div>
+
       <div className="p-4 max-w-3xl mx-auto w-full flex-1">
       {/* Header */}
       <header className="flex items-center justify-between py-6">
