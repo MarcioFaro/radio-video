@@ -29,7 +29,7 @@ export default function Room() {
   
   const { 
     roomName, queue, history, presence, chat, playback, radialista_id, connected,
-    joinRoom, leaveRoom, setPlaybackStatus, sendMessage, moveTrack, removeTrack, addTrack, seekTo 
+    joinRoom, leaveRoom, setPlaybackStatus, sendMessage, moveTrack, removeTrack, addTrack, seekTo, trackEnded
   } = useRoomStore();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -279,12 +279,8 @@ export default function Room() {
   };
 
   const handleNextTrack = () => {
-    if (!isRadialista) return;
-    const currentIndex = queue.findIndex(t => t.id === currentTrack?.id);
-    if (currentIndex >= 0 && currentIndex < queue.length - 1) {
-      const nextId = queue[currentIndex + 1].id;
-      setPlaybackStatus('playing', nextId, 0);
-    }
+    if (!isRadialista || !currentTrack) return;
+    trackEnded(currentTrack.id);
   };
 
   const handlePlayTrack = (trackId: string) => {
@@ -494,12 +490,16 @@ export default function Room() {
                 {/* Imagem de Fundo (Blur) */}
                 <img src={currentTrack.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-xl" />
                 
-                {/* Elemento Único de Áudio/Vídeo (Nunca desmontado para não recarregar) */}
                 <video 
                   ref={playerRef as any} 
                   className={`w-full h-full object-contain z-10 ${showVideo ? 'relative' : 'absolute opacity-0 pointer-events-none'}`} 
                   playsInline 
                   muted={isMuted} 
+                  onEnded={() => {
+                    if (isRadialista && currentTrack) {
+                      trackEnded(currentTrack.id);
+                    }
+                  }}
                 />
                 
                 {!showVideo && (

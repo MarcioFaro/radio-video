@@ -33,6 +33,7 @@ interface RoomState {
   removeTrack: (trackId: string) => void;
   seekTo: (timestamp: number) => void;
   simulateRadialistaChange: () => void;
+  trackEnded: (trackId: string) => void;
 }
 
 let unsubscribeRoom: (() => void) | null = null;
@@ -176,6 +177,14 @@ export const useRoomStore = create<RoomState>((set, get) => ({
       queue.splice(index, 1);
       queueData.applyQueue(roomId, queue);
       set(readRoom(roomId));
+    }
+  },
+
+  trackEnded: (trackId) => {
+    const { roomId, connected } = get();
+    if (!roomId) return;
+    if (connected) {
+      realtime.trackEnded(roomId, trackId);
     }
   },
 

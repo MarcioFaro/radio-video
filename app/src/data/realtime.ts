@@ -216,3 +216,7 @@ export function forceRadialista(roomId: string): void {
 export function removeTrack(roomId: string, trackId: string): void {
   socket.emit('remove_track', { roomId, trackId });
 }
+
+export function trackEnded(roomId: string, trackId: string): void {
+  socket.emit('track_ended', { roomId, trackId });
+}

@@ -275,6 +275,39 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('track_ended', (data: { roomId: string, trackId: string }) => {
+    const room = rooms.get(data.roomId);
+    if (!room) return;
+    
+    // Verifica se a música que terminou é a que está tocando
+    if (room.playback.currentTrackId === data.trackId) {
+      const trackIndex = room.queue.findIndex(t => t.id === data.trackId);
+      if (trackIndex >= 0) {
+        const track = room.queue[trackIndex];
+        
+        // Move para o histórico
+        room.history.push(track);
+        if (room.history.length > 50) room.history.shift();
+        io.to(data.roomId).emit('history_updated', room.history);
+        
+        // Remove da fila
+        room.queue.splice(trackIndex, 1);
+        io.to(data.roomId).emit('queue_updated', room.queue);
+        
+        // Pega a próxima música (agora é a do índice 0)
+        const nextTrack = room.queue[0];
+        if (nextTrack) {
+          room.playback = { status: 'playing', currentTrackId: nextTrack.id, timestamp: 0, updated_at: Date.now() };
+        } else {
+          room.playback = { status: 'paused', currentTrackId: null, timestamp: 0, updated_at: Date.now() };
+        }
+        
+        io.to(data.roomId).emit('playback_updated', room.playback);
+        scheduleSave();
+      }
+    }
+  });
+
   socket.on('remove_track', (data: { roomId: string, trackId: string }) => {
     const room = rooms.get(data.roomId);
     if (!room) return;
@@ -439,14 +472,18 @@ setInterval(() => {
         const track = room.queue[trackIndex];
         const expectedTimeSec = room.playback.timestamp + (now - room.playback.updated_at) / 1000;
         
-        // Se a música acabou
-        if (expectedTimeSec >= track.duracao_seg) {
-          // Move para o histórico
+        const validDuration = track.duracao_seg || Infinity;
+        // Failsafe do servidor (dá 10 segundos de margem para o front-end avançar primeiro via onEnded)
+        if (expectedTimeSec >= validDuration + 10) {
+          // O cliente não enviou 'track_ended', então o servidor força o avanço
           room.history.push(track);
-          if (room.history.length > 50) room.history.shift(); // limite de 50
+          if (room.history.length > 50) room.history.shift();
           io.to(room.id).emit('history_updated', room.history);
 
-          const nextTrack = room.queue[trackIndex + 1];
+          room.queue.splice(trackIndex, 1);
+          io.to(room.id).emit('queue_updated', room.queue);
+
+          const nextTrack = room.queue[0];
           if (nextTrack) {
             room.playback = {
               status: 'playing',
@@ -455,10 +492,9 @@ setInterval(() => {
               updated_at: now
             };
           } else {
-            // Fila acabou
             room.playback = {
               status: 'paused',
-              currentTrackId: track.id,
+              currentTrackId: null,
               timestamp: 0,
               updated_at: now
             };
