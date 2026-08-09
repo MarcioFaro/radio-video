@@ -4,7 +4,8 @@ import { useRoomStore } from '../store/useRoomStore';
 import { useUserStore } from '../store/useUserStore';
 import { useRoomsStore } from '../store/useRoomsStore';
 import AddMusicModal from '../components/AddMusicModal';
-import { Play, Pause, SkipForward, Plus, MessageCircle, Users, ChevronLeft, Send, Video, PictureInPicture2, Mic2, Headphones, ChevronUp, ChevronDown, BellOff, BellRing, Moon, Settings, Trash2, Volume2, VolumeX, AlertTriangle } from 'lucide-react';
+import Avatar from '../components/Avatar';
+import { Play, Pause, SkipForward, Plus, MessageCircle, Users, ChevronLeft, Send, Video, PictureInPicture2, Mic2, Headphones, ChevronUp, ChevronDown, BellOff, BellRing, Moon, Settings, Trash2, Volume2, VolumeX, AlertTriangle, X } from 'lucide-react';
 import { getServerTime } from '../data/realtime';
 
 const VAPID_PUBLIC_KEY = 'BD29BGxbHjhrzUQrUHLiAaRJZDhr7fRP0F3PFtPGpCHLaGjEPKi-Ril1heXJwVOa_3GV-exRHHo4y8cROaaZGhY';
@@ -48,6 +49,7 @@ export default function Room() {
   
   const [sleepMinutes, setSleepMinutes] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showUsersModal, setShowUsersModal] = useState(false);
   const [pushMuted, setPushMuted] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -496,7 +498,12 @@ export default function Room() {
           <div>
             <h1 className="text-lg font-bold text-white line-clamp-1">{roomName || 'Sala'}</h1>
             <p className="text-xs text-gray-400 flex items-center gap-1 flex-wrap">
-              <Users size={12} /> {presence.length} ouvindo
+              <button
+                onClick={() => setShowUsersModal(true)}
+                className="flex items-center gap-1 text-gray-400 hover:text-white hover:underline transition-colors"
+              >
+                <Users size={12} /> {presence.length} ouvindo
+              </button>
               <span className="mx-0.5">•</span>
               <Mic2 size={12} /> {radialistaName || 'Ninguém'}
               <span className={connected ? 'text-[#1db954] ml-1' : 'text-red-400 ml-1'}>
@@ -893,6 +900,46 @@ export default function Room() {
       </div>
 
       <AddMusicModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+
+      {/* Users in Room Modal */}
+      {showUsersModal && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowUsersModal(false)}>
+          <div
+            className="bg-[#282828] rounded-xl max-w-sm w-full shadow-2xl overflow-hidden border border-white/10 flex flex-col max-h-[80vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Users size={18} /> {presence.length} {presence.length === 1 ? 'pessoa na sala' : 'pessoas na sala'}
+              </h2>
+              <button onClick={() => setShowUsersModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                <X size={22} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {lineup.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-6">Ninguém na sala.</p>
+              ) : (
+                lineup.map((u) => (
+                  <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5">
+                    <Avatar name={u.name} url={u.avatar_url} size={36} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white line-clamp-1">
+                        {u.name}{u.id === user?.id ? ' (você)' : ''}
+                      </p>
+                      {u.id === radialista_id && (
+                        <p className="text-[11px] text-[#1db954] font-bold flex items-center gap-1">
+                          <Mic2 size={11} /> Radialista
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pause Warning Modal */}
       {showPauseWarning && (
