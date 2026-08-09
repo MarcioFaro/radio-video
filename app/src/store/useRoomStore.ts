@@ -61,7 +61,7 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   history: [],
   chat: [],
   presence: [],
-  playback: { status: 'paused', currentTrackId: null, timestamp: 0 },
+  playback: { status: 'paused', currentTrackId: null, timestamp: 0, updated_at: Date.now() },
   connected: false,
   userId: null,
 

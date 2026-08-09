@@ -192,7 +192,7 @@ export function sendMessage(roomId: string, userName: string, text: string): voi
 
 export function setPlayback(roomId: string, status: PlaybackState['status'], currentTrackId: string, timestamp: number): void {
   socket.emit('update_playback', { roomId, status, currentTrackId, timestamp });
-  playbackData.applyPlayback(roomId, { status, currentTrackId, timestamp });
+  playbackData.applyPlayback(roomId, { status, currentTrackId, timestamp, updated_at: Date.now() });
 }
 
 export function seekPlayback(roomId: string, timestamp: number): void {
