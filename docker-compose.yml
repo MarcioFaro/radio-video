@@ -25,6 +25,9 @@ services:
       - "3005:3005"
     volumes:
       - api_data:/app/data
+    environment:
+      - SUPABASE_URL=https://pskbycyehmifqemjopyu.supabase.co
+      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBza2J5Y3llaG1pZnFlbWpvcHl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyNDI5NDgsImV4cCI6MjEwMTgxODk0OH0.A2JCqutKlsnb2UBJKPj-o-Ll4Jaeo-7sL3LG3c0FjW0
     
   extractor:
     build:

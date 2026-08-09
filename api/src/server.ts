@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
 import webpush from 'web-push';
-import { rooms, getOrCreateRoom, pickRadialista, User, Track, Room, pushSubscriptions, syncUserToSupabase, supabase, loadRooms, scheduleSave } from './store';
+import { rooms, getOrCreateRoom, pickRadialista, User, Track, Room, pushSubscriptions, syncUserToSupabase, supabase, loadRooms, scheduleSave, saveTrackToSupabase, updateTrackStatusInSupabase, updateTrackOrderInSupabase, removeTrackFromSupabase, addFavoriteRoom, removeFavoriteRoom, getUserFavorites } from './store';
 import { SEEDED_ROOM_ID, SEEDED_ROOM_NAME, SEEDED_ROOM_CODE, SEEDED_SONGS, SeedSong } from './seed';
 
 const vapidKeys = {
@@ -137,7 +137,22 @@ fastify.post('/push/unsubscribe', async (request, reply) => {
   return { status: 'ok' };
 });
 
-// Função auxiliar para enviar push
+// ── Favoritos ────────────────────────────────────────────────────────────────
+fastify.get('/favorites/:userId', async (request, reply) => {
+  const { userId } = request.params as any;
+  const favorites = await getUserFavorites(userId);
+  return { favorites };
+});
+
+fastify.post('/favorites', async (request, reply) => {
+  const { userId, roomId, action } = request.body as any;
+  if (!userId || !roomId || !action) return reply.status(400).send({ error: 'Missing params' });
+  if (action === 'add') await addFavoriteRoom(userId, roomId);
+  else if (action === 'remove') await removeFavoriteRoom(userId, roomId);
+  return { status: 'ok' };
+});
+
+
 async function sendPushToRoom(roomId: string, senderId: string, payload: any) {
   const room = rooms.get(roomId);
   if (!room) return;
@@ -265,6 +280,9 @@ io.on('connection', (socket) => {
       io.to(data.roomId).emit('queue_updated', room.queue);
       io.to(data.roomId).emit('playback_updated', room.playback);
       
+      // Salva no Supabase
+      saveTrackToSupabase(data.roomId, newTrack).catch(console.error);
+
       // Envia Push Notification
       const senderId = Array.from(room.users.values()).find(u => u.socket_id === socket.id)?.id;
       if (senderId) {
@@ -283,18 +301,19 @@ io.on('connection', (socket) => {
     const room = rooms.get(data.roomId);
     if (!room) return;
     
-    // Verifica se a música que terminou é a que está tocando
     if (room.playback.currentTrackId === data.trackId) {
       const trackIndex = room.queue.findIndex(t => t.id === data.trackId);
       if (trackIndex >= 0) {
         const track = room.queue[trackIndex];
         
-        // Move para o histórico
+        // Move para o histórico local
         room.history.push(track);
         if (room.history.length > 50) room.history.shift();
-        io.to(data.roomId).emit('history_updated', room.history);
         
-        // Pega a próxima música (avançando o índice)
+        // Marca como histórico no Supabase
+        updateTrackStatusInSupabase(track.id, 'historico').catch(console.error);
+        
+        // Pega a próxima música
         const nextTrack = room.queue[trackIndex + 1];
         if (nextTrack) {
           room.playback = { status: 'playing', currentTrackId: nextTrack.id, timestamp: 0, updated_at: Date.now() };
@@ -317,29 +336,19 @@ io.on('connection', (socket) => {
 
     const index = room.queue.findIndex(t => t.id === data.trackId);
     if (index >= 0) {
-      const removedTrack = room.queue[index];
       room.queue.splice(index, 1);
       io.to(data.roomId).emit('queue_updated', room.queue);
+      
+      // Remove do Supabase
+      removeTrackFromSupabase(data.trackId).catch(console.error);
       scheduleSave();
 
-      // Se apagou a música que estava tocando, avança para a próxima
       if (room.playback.currentTrackId === data.trackId) {
-        const nextTrack = room.queue[index]; // o elemento que estava na próxima posição desceu para `index`
+        const nextTrack = room.queue[index];
         if (nextTrack) {
-          room.playback = {
-            status: 'playing',
-            currentTrackId: nextTrack.id,
-            timestamp: 0,
-            updated_at: Date.now()
-          };
+          room.playback = { status: 'playing', currentTrackId: nextTrack.id, timestamp: 0, updated_at: Date.now() };
         } else {
-          // Fila acabou
-          room.playback = {
-            status: 'paused',
-            currentTrackId: null,
-            timestamp: 0,
-            updated_at: Date.now()
-          };
+          room.playback = { status: 'paused', currentTrackId: null, timestamp: 0, updated_at: Date.now() };
         }
         io.to(data.roomId).emit('playback_updated', room.playback);
         scheduleSave();
@@ -416,6 +425,9 @@ io.on('connection', (socket) => {
 
     room.queue = reordered as Track[];
     io.to(data.roomId).emit('queue_updated', room.queue);
+    
+    // Atualiza a ordem no Supabase
+    updateTrackOrderInSupabase(data.roomId, room.queue).catch(console.error);
     scheduleSave();
   });
 

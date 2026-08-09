@@ -26,13 +26,18 @@ export default function Rooms() {
   const [joinError, setJoinError] = useState(location.state?.joinError === true);
   
   const [liveRooms, setLiveRooms] = useState<LiveRoom[]>([]);
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('comuna_favorites') || '[]');
-    } catch {
-      return [];
+  const [favorites, setFavorites] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetch(`${BACKEND_URL}/favorites/${user.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.favorites) setFavorites(data.favorites);
+        })
+        .catch(console.error);
     }
-  });
+  }, [user]);
 
   useEffect(() => {
     fetch(`${BACKEND_URL}/rooms`)
@@ -71,9 +76,17 @@ export default function Rooms() {
 
   const toggleFavorite = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    const next = favorites.includes(id) ? favorites.filter(f => f !== id) : [...favorites, id];
+    if (!user) return;
+    
+    const isFav = favorites.includes(id);
+    const next = isFav ? favorites.filter(f => f !== id) : [...favorites, id];
     setFavorites(next);
-    localStorage.setItem('comuna_favorites', JSON.stringify(next));
+    
+    fetch(`${BACKEND_URL}/favorites`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id, roomId: id, action: isFav ? 'remove' : 'add' })
+    }).catch(console.error);
   };
 
   const sortedRooms = [...liveRooms].sort((a, b) => {
