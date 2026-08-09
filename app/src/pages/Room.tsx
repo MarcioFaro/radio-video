@@ -494,14 +494,16 @@ export default function Room() {
                 {/* Imagem de Fundo (Blur) */}
                 <img src={currentTrack.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-xl" />
                 
-                {/* Elemento de Áudio/Vídeo Real */}
-                {showVideo ? (
-                  <video ref={playerRef as any} className="relative w-full h-full object-contain z-10" playsInline muted={isMuted} />
-                ) : (
-                  <>
-                    <img src={currentTrack.thumbnail_url} alt="Cover" className="relative h-full object-contain z-10 shadow-2xl rounded-lg" />
-                    <audio ref={playerRef as any} className="hidden" muted={isMuted} />
-                  </>
+                {/* Elemento Único de Áudio/Vídeo (Nunca desmontado para não recarregar) */}
+                <video 
+                  ref={playerRef as any} 
+                  className={`w-full h-full object-contain z-10 ${showVideo ? 'relative' : 'absolute opacity-0 pointer-events-none'}`} 
+                  playsInline 
+                  muted={isMuted} 
+                />
+                
+                {!showVideo && (
+                  <img src={currentTrack.thumbnail_url} alt="Cover" className="relative h-full object-contain z-10 shadow-2xl rounded-lg" />
                 )}
 
                 {/* Overlay de Bloqueio de Autoplay (Celular) */}
