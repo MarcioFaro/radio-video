@@ -52,10 +52,24 @@ export default function Room() {
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [showPauseWarning, setShowPauseWarning] = useState(false);
-  
+  const [showControls, setShowControls] = useState(false);
+
   const playerRef = useRef<HTMLVideoElement | HTMLAudioElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const lastSyncTsRef = useRef<number | null>(null);
+  const hideControlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const revealControls = () => {
+    setShowControls(true);
+    if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
+    hideControlsTimeoutRef.current = setTimeout(() => setShowControls(false), 2500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
+    };
+  }, []);
 
   const formatTime = (sec: number) => {
     if (!Number.isFinite(sec) || sec < 0) sec = 0;
@@ -505,7 +519,17 @@ export default function Room() {
         <div className="flex-1 flex flex-col p-4 lg:p-8 overflow-y-auto">
           
           {/* Video Player Area */}
-          <div className="w-full max-w-5xl mx-auto aspect-video shrink-0 min-h-[200px] max-h-[40vh] lg:max-h-[50vh] bg-black rounded-xl overflow-hidden relative shadow-2xl group flex items-center justify-center">
+          <div
+            onTouchStart={revealControls}
+            onClick={revealControls}
+            onMouseEnter={revealControls}
+            onMouseMove={revealControls}
+            onMouseLeave={() => {
+              if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
+              setShowControls(false);
+            }}
+            className="w-full max-w-5xl mx-auto aspect-video shrink-0 min-h-[200px] max-h-[40vh] lg:max-h-[50vh] bg-black rounded-xl overflow-hidden relative shadow-2xl flex items-center justify-center"
+          >
             {currentTrack ? (
               <>
                 {/* Imagem de Fundo (Blur) */}
@@ -550,7 +574,7 @@ export default function Room() {
                 )}
 
                 {/* Overlay Controls */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity z-20 flex items-center justify-center gap-4">
+                <div className={`absolute inset-0 bg-black/40 transition-opacity z-20 flex items-center justify-center gap-4 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   <button 
                     onClick={togglePlay}
                     disabled={!isRadialista}
