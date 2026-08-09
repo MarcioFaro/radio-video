@@ -531,7 +531,7 @@ export default function Room() {
             className={`w-full max-w-5xl mx-auto aspect-video shrink-0 bg-black rounded-xl overflow-hidden relative shadow-2xl flex items-center justify-center transition-all ${
               showVideo
                 ? 'min-h-[200px] max-h-[40vh] lg:max-h-[50vh]'
-                : 'min-h-[100px] max-h-[20vh] lg:min-h-[200px] lg:max-h-[50vh]'
+                : 'min-h-[70px] max-h-[13vh] lg:min-h-[200px] lg:max-h-[50vh]'
             }`}
           >
             {currentTrack ? (
