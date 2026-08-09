@@ -290,13 +290,70 @@ export default function Room() {
   useEffect(() => {
     const handleVisibility = () => {
       const el = videoRef.current;
-      if (document.hidden && el && !el.paused && document.pictureInPictureElement !== el) {
-        el.requestPictureInPicture().catch(() => {});
+      if (!el) return;
+
+      if (document.hidden) {
+        if (!el.paused && document.pictureInPictureElement !== el) {
+          el.requestPictureInPicture().catch(() => {});
+        }
+        return;
+      }
+
+      // Voltou a ficar visivel: se o SO suspendeu a reproducao (ou
+      // descartou o recurso de midia) enquanto o app estava em segundo
+      // plano, o elemento fica "travado" pausado sem ninguem tentar
+      // consertar -- por isso hoje so reabrir o app resolve. Aqui a
+      // gente detecta e tenta retomar sozinho, usando a posicao "ao vivo"
+      // calculada pelo relogio (o currentTime do proprio elemento pode
+      // nao ser confiavel se o recurso foi descartado pelo SO).
+      if (playback.status === 'playing' && el.paused) {
+        const livePos = Math.max(0, playback.timestamp + (getServerTime() - playback.updated_at) / 1000);
+        const broken = !!el.error || el.readyState === 0;
+        const doPlay = () => {
+          el.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
+        };
+        if (broken) {
+          el.load();
+          el.addEventListener('loadedmetadata', () => {
+            el.currentTime = livePos;
+            doPlay();
+          }, { once: true });
+        } else {
+          if (Math.abs(el.currentTime - livePos) > 2) el.currentTime = livePos;
+          doPlay();
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
+  }, [playback.status, playback.timestamp, playback.updated_at]);
+
+  // Sincroniza controles nativos que mexem no elemento diretamente (botao de
+  // play/pause do proprio Picture-in-Picture do SO, por exemplo) -- sem
+  // isso, o efeito que sincroniza o player com o estado da sala desfaz essa
+  // acao logo em seguida, porque nunca fica sabendo que ela aconteceu.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !isRadialista || !currentTrack) return;
+
+    const handleNativePlay = () => {
+      if (playback.status !== 'playing') {
+        setPlaybackStatus('playing', currentTrack.id, el.currentTime);
+      }
+    };
+    const handleNativePause = () => {
+      if (playback.status === 'playing') {
+        setPlaybackStatus('paused', currentTrack.id, el.currentTime);
+      }
+    };
+
+    el.addEventListener('play', handleNativePlay);
+    el.addEventListener('pause', handleNativePause);
+    return () => {
+      el.removeEventListener('play', handleNativePlay);
+      el.removeEventListener('pause', handleNativePause);
+    };
+  }, [isRadialista, currentTrack, playback.status, setPlaybackStatus]);
 
   // Media Session API (Metadata para PiP, Lockscreen, etc.)
   useEffect(() => {
