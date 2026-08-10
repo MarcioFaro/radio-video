@@ -1,6 +1,6 @@
 # Plano de Implementação — Rádio Digital Colaborativa (PWA)
 
-> Documento de planejamento para implementação futura. Decisões alinhadas com o dono do projeto em 08/08/2026. **Revisão v2 (mesma data):** adiciona sincronização de reprodução ao vivo, papel de radialista dinâmico e chat de sala — ver seção 0.1. **Revisão v3 (mesma data):** inverte a ordem de construção — frontend completo (todas as telas, com máscara funcional em cima de dados fixture) primeiro e aprovado, integração real depois — ver seção 0.2.
+> Documento de planejamento para implementação futura. Decisões alinhadas com o dono do projeto em 08/08/2026. **Revisão v2 (mesma data):** adiciona sincronização de reprodução ao vivo, papel de radialista dinâmico e chat de sala — ver seção 0.1. **Revisão v3 (mesma data):** inverte a ordem de construção — frontend completo (todas as telas, com máscara funcional em cima de dados fixture) primeiro e aprovado, integração real depois — ver seção 0.2. **Revisão v4 (09/08/2026):** app já está em produção (`comunaradio.duckdns.org`) com dados reais — Fases 2 a 8 substancialmente concluídas. Sessão de estabilização pós-integração registrada na seção 10.
 
 ## 0. Mudanças de decisão vs spec original
 
@@ -182,82 +182,89 @@ Eventos realtime (canal por `room_id`): `track_added`, `track_removed`, `queue_r
 
 ### Fase 3 — Backend API + infraestrutura (5–7 dias)
 > Absorve a infraestrutura da antiga Fase 0 (VM, domínio, nginx) que não era necessária antes desta fase.
-- [ ] VM: criar usuário, instalar Node 20, Python 3.11, `uv`, nginx, certbot; configurar SSH
-- [ ] Comprar/apontar domínio → DNS A para o IP da VM
-- [ ] nginx: certificado Let's Encrypt, página "em manutenção"
-- [ ] Decidir gerenciador de processos: **pm2** (mais simples) — instalar
-- [ ] Healthcheck externo simples (ex.: UptimeRobot free) apontando pro `/health`
-- [ ] `api/`: Fastify + pino + cors (allowlist do domínio) + dotenv
-- [ ] Guarda de autenticação: validar Bearer JWT do Supabase em todas as rotas
-- [ ] `POST /extract` (proxy p/ extrator) com rate limit por usuário/IP (ex.: 30/min)
-- [ ] `GET /health`
-- [ ] Módulo push: `web-push`, VAPID privado em env; `sendToRoom(roomId, payload)` → busca subs dos membros → `sendAll`, remove endpoints com erro 410
-- [ ] Endpoints auxiliares: `POST /push/unsubscribe` (limpeza ao sair/revogar)
-- [ ] Cron diário: limpar `push_subscriptions` órfãs
-- [ ] Testes com curl/Postman + push para subscription de teste
-- **Gate:** extração + push funcionando via API com JWT, extrator e backend rodando na VM atrás do domínio real.
+> **Status (09/08/2026): concluída, com desvios de ferramenta registrados abaixo.**
+- [x] VM: usuário/SSH configurados (Google Cloud e2-micro) — **desvio:** proxy é **Caddy** (não nginx), rodando via Docker Compose junto com `api` e `extractor` (não pm2) — ver `docker-compose.yml`, `Caddyfile`
+- [x] Domínio → **desvio:** DuckDNS gratuito (`comunaradio.duckdns.org`), não domínio comprado
+- [x] Certificado HTTPS automático (Caddy resolve isso sozinho, equivalente ao certbot do plano original)
+- [ ] ~~pm2~~ — não se aplica; processos gerenciados pelo Docker Compose (`restart: unless-stopped`)
+- [ ] Healthcheck externo (UptimeRobot ou similar) — **não configurado**, pendente
+- [x] `api/`: Fastify + pino (`logger: true`) + cors — **atenção:** `origin: '*'` hoje, sem allowlist (ver Fase 9/pendências)
+- [ ] Guarda de autenticação Bearer JWT — **não implementado**. Ver nota abaixo.
+- [ ] Rate limit em `/extract` — **não implementado**
+- [x] `GET /health`
+- [x] Módulo push: `web-push` + VAPID, `sendPushToRoom` implementado e em uso (nova música, chat)
+- [x] `POST /push/unsubscribe` e `POST /push/subscribe`, `POST /push/settings` (mute por sala)
+- [ ] Cron de limpeza de `push_subscriptions` órfãs — não verificado
+- **Gate:** ✅ atingido em produção, com as ressalvas acima.
+
+> **Nota importante sobre autenticação (09/08/2026):** o plano original previa Supabase Auth (magic link) + guarda JWT nas rotas da API. Isso **não foi implementado** — a tela de "Login" (`app/src/pages/Login.tsx`) só pede um nome de exibição, guardado em `localStorage`, sem verificação de identidade nenhuma. Qualquer pessoa com o link da sala entra livremente, e nada impede alguém de se passar por outro nome. Para o escopo atual (uso pessoal entre amigos, sem publicação em loja), isso foi uma simplificação aceitável na prática, mas é uma divergência real do plano que vale registrar caso o projeto cresça de escopo.
 
 ### Fase 4 — Integração de dados reais + background play real (3–5 dias, NOVO v3)
 > Troca as fixtures da Fase 1 por dados reais, sem tocar na UI já aprovada.
-- [ ] `data/rooms.ts` e `data/queue.ts` → chamadas reais ao Supabase (`rooms`, `room_members`, `tracks`, `queue`)
-- [ ] Tela Adicionar Música passa a chamar `/extract` de verdade (backend real da Fase 3)
-- [ ] Realtime `postgres_changes` → fila atualiza ao vivo entre dispositivos (testar com 2 navegadores)
-- [ ] Player passa a tocar `audio_url`/`video_url` reais (não mais o áudio de teste da Fase 1)
-- [ ] `visibilitychange`: ao minimizar → troca p/ stream de áudio real — revalida o resultado da Fase 0.5 agora com stream de verdade, não arquivo de teste
-- [ ] Tratamento de URL expirada: erro de rede/HTTP 403 no media → re-resolve via `/extract` e retoma
-- [ ] iOS: confirmar 1º play por gesto do usuário com stream real; revisar onboarding
-- **Gate:** login + sala + fila sincronizada entre 2 dispositivos, música tocando de verdade, background play confirmado nos 2 SOs com stream real.
+> **Status (09/08/2026): concluída e em produção**, com uma reformulação grande de arquitetura de dados (ver nota).
+- [x] Fila/salas com dados reais — **desvio de arquitetura:** em vez do cliente falar direto com Supabase (`postgres_changes`), toda a integração real passou a ser **mediada pelo backend Fastify via Socket.IO** (`app/src/data/realtime.ts` + `api/src/server.ts`), que por sua vez persiste no Supabase. O cliente nunca recebe credenciais do Supabase.
+- [x] Tela Adicionar Música chama `/extract` real (extrator Python rodando em produção)
+- [x] Fila atualiza ao vivo entre dispositivos (via eventos Socket.IO, não `postgres_changes`)
+- [x] Player toca `audio_url`/`video_url` reais (arquivos servidos em `comunaradio.duckdns.org/media/`)
+- [x] Background play — trabalhado extensivamente em 09/08/2026 (Media Session, Picture-in-Picture automático, recuperação ao voltar do segundo plano). **Resultado real:** funciona bem no que o navegador permite; gerenciadores de bateria agressivos de fabricante (MIUI confirmado) ainda podem matar o processo por completo, fora do alcance de qualquer ajuste em JS — ver seção 10.
+- [ ] Tratamento de URL de mídia expirada (re-resolve automático) — não verificado/implementado nesta sessão
+- [ ] Confirmação formal em iOS real — não testado (sem dispositivo disponível)
+- **Gate:** ✅ atingido — múltiplas salas reais em uso, música tocando de verdade, sincronizada.
 
 ### Fase 5 — Presença + radialista dinâmico: lógica real (2–4 dias)
-> UI já existe e já foi aprovada na Fase 1 — aqui entra a lógica de verdade por trás.
-- [ ] `data/presence.ts` → canal de Presence real do Supabase por `room_id`
-- [ ] Backend também assina o canal de presence (service key) e espelha em `room_sessions` (entrou_em, ultimo_heartbeat)
-- [ ] Heartbeat curto (ex.: 15s) do cliente; timeout (ex.: 45s sem heartbeat) → remove sessão, recalcula radialista
-- [ ] Lógica: radialista = `MIN(entrou_em)` entre sessões ativas da sala; recalcular em toda entrada/saída/timeout
-- [ ] Evento `radialista_changed` broadcast real pro canal da sala — remove o seletor dev de simulação da Fase 1
-- **Gate:** dois navegadores mostram o mesmo radialista de verdade; fechar a aba do radialista transfere o papel em poucos segundos.
+> **Status (09/08/2026): concluída**, com arquitetura mais simples que a planejada (ver nota).
+- [x] Presença real — **desvio:** não usa o canal de Presence do Supabase nem a tabela `room_sessions` planejada na seção 3. A fonte de verdade é simplesmente o `Map` de sockets conectados em memória no processo Node (`room.users`), o que já resolve o mesmo problema de "cliente não pode forjar presença" (a conexão socket em si é a prova de presença) com bem menos peças móveis.
+- [ ] Heartbeat de aplicação (15s) / timeout (45s) — **não existe**; a detecção de saída depende só do `leave_room` explícito ou do `disconnect` do Socket.IO, cujo timeout de ping pode levar até ~20s numa desconexão "suja". Esse foi exatamente o mecanismo por trás do bug de salto de posição investigado e corrigido em 09/08/2026 (ver seção 10 e `docs/comportamento-playback.md`).
+- [x] Radialista = usuário presente há mais tempo (`pickRadialista`, por `entrou_em`), recalculado em toda entrada/saída
+- [x] `radialista_changed` broadcast real
+- **Gate:** ✅ atingido em produção.
 
 ### Fase 6 — Sincronização ao vivo: lógica real (5–8 dias, CRÍTICO)
-- [ ] `playback_state` ganha `server_started_at`; backend calcula posição esperada = `now() - server_started_at`
-- [ ] Endpoint de sincronização de relógio (`GET /time`) — cliente mede offset local↔servidor (round-trip simples, tipo NTP simplificado)
-- [ ] Comandos de transporte (`play`, `pause`, `skip`, `seek`) só aceitos do `radialista_user_id` atual — validado no backend, nunca confiado do cliente
-- [ ] Cliente corrige deriva real: compara `audio.currentTime` esperado vs. real a cada poucos segundos; seek se desvio > limiar (~1-2s)
-- [ ] Entrada no meio da faixa: buffer + seek real pro ponto certo — aqui o estado "sincronizando..." da Fase 1 (até então só visual) passa a refletir tempo real de buffer
-- [ ] Backend avança a fila sozinho quando a faixa termina (baseado em `duracao_seg`), independente de qualquer cliente estar aberto; broadcast `now_playing_changed`
-- [ ] Reconexão após queda: cliente sempre pula pro ponto atual (não tenta retomar de onde parou)
-- [ ] Teste com 3+ dispositivos em redes diferentes (wifi + 4G) medindo desvio real
-- [ ] Revisar `docs/telas.md`: atualizar os estados da Sala marcados como "provisórios" com o comportamento real validado aqui
-- **Gate:** 3 dispositivos ouvindo a mesma faixa com desvio perceptível < 2s; troca de radialista não trava a sala.
+> **Status (09/08/2026): concluída**, nomenclatura diferente da planejada mas mesmo conceito.
+- [x] Posição calculada por relógio — implementado como `playback.timestamp` + `playback.updated_at` (equivalente ao `server_started_at` planejado)
+- [x] Sincronização de relógio cliente↔servidor — implementado via evento Socket.IO `get_time` (equivalente ao `GET /time` planejado)
+- [x] Comandos de transporte só aceitos do radialista atual — **validado no servidor** (`user.id === room.radialista_id`), nunca confiado do cliente
+- [x] Cliente corrige deriva real (`timeupdate` + comparação com posição esperada, seek se desvio > 2s)
+- [x] Entrada no meio da faixa: seek real pro ponto certo
+- [x] Backend avança a fila sozinho quando a faixa termina, com failsafe por `setInterval` mesmo sem nenhum cliente conectado — **e agora também volta pra primeira música ao terminar a última** (loop, adicionado 09/08/2026)
+- [x] Reconexão após sala ficar vazia — **decisão revista em 09/08/2026**: em vez de "sempre pular pro ponto atual" (como o plano original previa), a sala agora **pausa** exatamente no momento em que fica vazia e **retoma do ponto congelado** quando alguém volta. Documentado em detalhe, com as alternativas descartadas e a causa raiz do bug relacionado, em `docs/comportamento-playback.md`.
+- [ ] Teste formal com 3+ dispositivos em redes diferentes medindo desvio — não executado como teste formal, mas validado organicamente em uso real
+- [ ] Revisar `docs/telas.md` com o comportamento real da Sala — pendente
+- **Gate:** ✅ considerado atingido pelo uso real; falta só o teste formal de desvio.
 
 ### Fase 7 — Chat da sala: lógica real (2–3 dias)
-- [ ] Tabela `messages`; `data/chat.ts` → insert/realtime reais via Supabase client (RLS: só membros da sala)
-- [ ] Realtime `postgres_changes` em `messages` → lista atualiza ao vivo de verdade
-- [ ] (Opcional) Push de nova mensagem quando o app está em background — reaproveita módulo de push da Fase 3
-- **Gate:** mensagem enviada por um membro aparece em tempo real pros demais, de verdade.
+> **Status (09/08/2026): concluída**, mesma arquitetura mediada pelo backend da Fase 4 (não Supabase Realtime direto).
+- [x] Chat real via Socket.IO (`send_message`/`chat_message`), persistido no estado da sala (memória + `rooms.json`)
+- [x] Lista atualiza ao vivo de verdade
+- [x] Push de nova mensagem quando alguém está fora da sala (`sendPushToRoom` no handler de `send_message`)
+- [x] **Novo, além do plano original (09/08/2026):** mensagens expiram após 24h (`pruneOldChatMessages`), e badge de "não lida" na aba Chat
+- **Gate:** ✅ atingido em produção.
 
 ### Fase 8 — Push notifications (2–4 dias)
-- [ ] Gerar VAPID keys (`npx web-push generate-vapid-keys`); pública no app, privada na VM
-- [ ] SW: handlers `push` (notificação com ícone + deep link) e `notificationclick` (foca/abre a sala)
-- [ ] Fluxo de permissão contextual: botão "Receber notificações" na sala → subscribe → gravar em `push_subscriptions`
-- [ ] Backend: notificar demais membros em `track_added`; notificar convidado em convite
-- [ ] Limpeza: permissão revogada → unsubscribe endpoint
-- [ ] Matriz de teste: Chrome Android, Chrome desktop, Firefox, Edge, Safari iOS (instalado)
-- **Gate:** push recebido nos 5 alvos e deep link abre a sala correta.
+> **Status (09/08/2026): concluída.**
+- [x] VAPID keys geradas e em uso
+- [x] Service Worker (`sw.js`) trata `push` e `notificationclick`
+- [x] Fluxo de permissão contextual na sala (botão "Alertas")
+- [x] Backend notifica em `track_added` e em `send_message`
+- [x] Endpoint de unsubscribe
+- [ ] Matriz de teste formal nos 5 navegadores/SOs alvo — não executada de forma sistemática
+- **Gate:** ✅ atingido nos ambientes testados (Chrome Android confirmado extensivamente); demais navegadores não testados formalmente.
 
 ### Fase 9 — Deploy final + hardening + polish restante (5–7 dias)
 > Absorve o que sobrava das antigas Fases 9 e 10 que dependia de dados reais.
-- [ ] Sleep timer (15/30/60 min)
-- [ ] Histórico / recentes na sala
-- [ ] Reordenar/remover músicas da fila
-- [ ] Sentry web (free) para erros + endpoint de log no VM
-- [ ] Settings por sala: toggles de notificação
-- [ ] nginx final: serve build estática + reverse proxy `/api` (Fastify) e `/extractor`; headers de segurança + CSP
-- [ ] Revisar RLS do Supabase: membros leem a sala, dono administra; **service key nunca no PWA**
-- [ ] Rate limiting global, CORS restrito, `robots.txt` (bloquear indexação)
-- [ ] Backups (Supabase free tem daily) + revisão do healthcheck já configurado na Fase 3
-- [ ] Runbook em `docs/`: como atualizar yt-dlp, reiniciar pm2, falhas comuns e respostas
-- [ ] Onboarding dos amigos: instruções de instalação PWA, permissão de notificação, convites por link
-- **Gate:** app publicamente acessível (pro grupo fechado) via domínio próprio, com todas as fases anteriores validadas em conjunto.
+> **Status (09/08/2026): parcialmente concluída** — ver seção 9 (Pendências) para a lista consolidada do que falta.
+- [x] Sleep timer (15/30/60 min)
+- [ ] Histórico / recentes na sala — **não tem UI** (o backend já guarda `room.history`, só falta expor na interface)
+- [x] Reordenar/remover músicas da fila
+- [ ] Sentry (ou equivalente) para erros — não implementado
+- [x] Settings por sala: toggle de silenciar notificações
+- [x] Proxy final servindo PWA + `/api` + extrator, com HTTPS — via Caddy (não nginx, ver Fase 3)
+- [ ] Revisão de RLS do Supabase — **nota:** como o cliente nunca fala direto com o Supabase (tudo mediado pelo backend, Fase 4), a superfície de risco mudou: o ponto crítico real hoje é que o backend usa a **service_role_key** (que ignora RLS por completo) — arquitetura correta desde que essa chave nunca vaze para o cliente (não vaza), mas ela está em texto puro no `docker-compose.yml`, **commitada no histórico do git** — ver seção 9.
+- [ ] Rate limiting global, CORS restrito (hoje `origin: '*'`), `robots.txt` — nenhum implementado
+- [ ] Backups / revisão de healthcheck — não configurado
+- [ ] Runbook formal em `docs/` — parcialmente coberto por `docs/comportamento-playback.md`, mas não há um runbook operacional (como atualizar, reiniciar, diagnosticar)
+- [ ] Onboarding dos amigos — não formalizado (não é bloqueante, dado que não há publicação em loja)
+- **Gate:** parcialmente atingido — app funcionando establemente em produção para o grupo fechado, mas vários itens de segurança/observabilidade da lista de hardening seguem pendentes (seção 9).
 
 ## 7. Custos estimados
 
@@ -272,14 +279,58 @@ Eventos realtime (canal por `room_id`): `track_added`, `track_removed`, `queue_r
 
 ## 8. Riscos atualizados (mais importantes primeiro)
 
-1. **Background audio no iOS não sustenta de forma confiável** — maior risco do projeto depois da extração; validado cedo via spike (Fase 0.5), antes de investir no resto da stack.
-2. **yt-dlp quebra com mudanças do YouTube** — mitigado com fallback Piped (best-effort) + runbook de atualização + testar na Fase 2 antes de integrar ao resto.
-3. **Deriva de clock / dessincronização perceptível entre dispositivos** — mitigado com relógio autoritativo no backend (`server_started_at`), correção periódica de deriva no cliente e re-sync forçado ao reconectar (Fase 6).
-4. **Corrida no handoff do radialista** — dois clientes se acharem "no controle" ao mesmo tempo; mitigado validando no backend, a cada comando, se o remetente é o `radialista_user_id` atual (nunca confiar no cliente).
-5. **Radialista fantasma** (queda de conexão sem saída explícita) — mitigado com heartbeat curto (15s) e timeout (45s) que força recálculo do radialista (Fase 5).
-6. **Caveats de iOS**: Media Session/background exigem PWA instalado e 1º play com gesto — mitigado com UX de onboarding.
-7. **Autoplay policy** (Chrome bloqueia autoplay com som) — mitigado pelo primeiro play sempre ser por gesto do usuário.
-8. **URLs de stream expiram** — re-resolve transparente implementado.
-9. **ToS do YouTube** — uso pessoal de grupo fechado, sem loja, sem monetização (tolerado na prática; nunca distribuir publicamente).
-10. **Endpoints de push mudam** — cleanup de subs obsoletas no envio.
-11. **VM sem monitoramento** — mitigado com healthcheck externo configurado já na Fase 3 (quando a VM entra em cena), não deixado pro fim.
+1. **Background audio não sustenta de forma confiável em Android com gerenciador de bateria agressivo de fabricante** (confirmado no MIUI/Xiaomi) — risco real e **confirmado em produção** em 09/08/2026, não só teórico. Mitigado até o teto que a plataforma web permite: Media Session API, elemento `<video>` único com `autoPictureInPicture`, recuperação automática ao voltar de segundo plano, e sincronização de controles nativos (PiP) de volta pro estado da sala. Quando o SO mata o processo por completo, nenhum desses ajustes evita — só liberar o app nas configurações de bateria do aparelho resolve por completo. iOS segue não testado (sem dispositivo disponível). Considerado, e descartado por falta de necessidade, o caminho de empacotar com Capacitor para ganhar background audio nativo de verdade (custo/benefício não compensa pro escopo atual de projeto pessoal/estudo).
+2. **yt-dlp quebra com mudanças do YouTube** — fallback Piped implementado (Fase 2); runbook formal de atualização ainda não escrito.
+3. **Deriva de clock / dessincronização perceptível entre dispositivos** — mitigado com relógio autoritativo no backend (`playback.timestamp` + `updated_at`), correção periódica de deriva no cliente. Validado organicamente em uso real; teste formal com múltiplos dispositivos em redes diferentes ainda pendente.
+4. **Corrida no handoff do radialista** — mitigado validando no backend, a cada comando, se o remetente é o `radialista_id` atual (nunca confiado do cliente) — confirmado no código (`update_playback`, `seek_playback`).
+5. **Radialista fantasma / detecção de saída lenta** — **não existe** o heartbeat de aplicação (15s/45s) previsto na Fase 5; a detecção depende do `leave_room` explícito (rápido) ou do timeout de ping do Socket.IO (pode levar ~20s numa desconexão "suja", ex.: app morto em segundo plano). Esse foi exatamente o mecanismo por trás de um bug real de salto de posição investigado e corrigido em 09/08/2026 — a correção aplicada (congelar a posição assim que a saída for detectada, não importa quando) torna o sistema tolerante a essa latência em vez de eliminá-la. Ver `docs/comportamento-playback.md`.
+6. **Caveats de iOS**: Media Session/background exigem PWA instalado e 1º play com gesto — não validado com dispositivo real ainda.
+7. **Autoplay policy** (Chrome bloqueia autoplay com som) — mitigado pelo primeiro play sempre ser por gesto do usuário; overlay "Áudio Bloqueado" cobre o caso de falha.
+8. **URLs de stream expiram** — re-resolve automático **não confirmado como implementado**; risco em aberto, não validado nesta sessão.
+9. **ToS do YouTube** — uso pessoal de grupo fechado, sem loja, sem monetização (tolerado na prática; nunca distribuir publicamente). Confirmado nesta sessão que não há intenção de publicar em lojas.
+10. **Endpoints de push mudam** — cleanup de subs obsoletas no envio (implementado na Fase 3).
+11. **VM sem monitoramento externo** — healthcheck externo (ex.: UptimeRobot) **não configurado**; segue pendente.
+12. **Segurança/observabilidade de produção em aberto** (novo, 09/08/2026; credenciais rotacionadas em 10/08/2026 — ver seção 9): sem autenticação real de usuário, CORS totalmente aberto (`origin: '*'`), sem rate limiting.
+
+## 9. Pendências conhecidas (levantamento de 09/08/2026)
+
+Lista consolidada do que ficou de fora depois da sessão de estabilização da seção 10 — nada aqui é urgente pro uso atual (grupo fechado, sem publicação em loja), mas fica registrado pra não se perder:
+
+**Segurança / infraestrutura**
+- ✅ **Resolvido em 10/08/2026**: chave SSH de deploy e credenciais do Supabase rotacionadas. A chave SSH antiga foi revogada do `authorized_keys` da VM; a `service_role_key`/`anon key` legadas foram desativadas no painel do Supabase (migrado para o sistema novo de `publishable`/`secret` keys). `docker-compose.yml` não tem mais segredos em texto puro — lê de um `.env` na VM (fora do git). Os arquivos `github-deploy-key`/`.pub` foram removidos do repositório (não do histórico — decisão consciente de não reescrever o histórico do git, já que a chave antiga está revogada e portanto inofensiva mesmo visível no `git log`).
+- CORS totalmente aberto (`origin: '*'`) na API e no Socket.IO — segue pendente.
+- Sem rate limiting em nenhuma rota (`/extract` incluso).
+- Sem autenticação real de usuário (login é só um nome de exibição local — ver nota na Fase 3).
+- Sem healthcheck externo monitorando a VM.
+
+**Funcionalidades do plano original ainda não feitas**
+- Tela/UI de histórico de músicas tocadas (o backend já guarda `room.history`, falta expor).
+- Heartbeat de aplicação para detecção de saída de sala mais rápida que o timeout do Socket.IO (mitigado, não eliminado — ver risco 5).
+- Re-resolve automático de URL de mídia expirada — não confirmado.
+- Teste formal de deriva com 3+ dispositivos em redes diferentes.
+- Matriz de teste formal de push em todos os navegadores/SOs alvo.
+- Sentry (ou equivalente) para observabilidade de erros em produção.
+- Runbook operacional formal (`docs/`).
+- Validação em dispositivo iOS real (nunca testado).
+
+**Não é considerado pendente** (decisão consciente): publicação em loja, app nativo via Capacitor, onboarding formal de amigos — descartados ou fora de escopo pra um projeto pessoal/de estudo, conforme conversa de 09/08/2026.
+
+## 10. Sessão de estabilização pós-integração (09/08/2026)
+
+Sessão longa e contínua de bugs relatados em uso real + melhorias, depois que o app já estava rodando em produção com dados reais. Registrado aqui porque vários desses achados corrigiram suposições erradas do plano original (ex.: riscos 1, 5 e 8 acima), não só "bugs pontuais". Ordem cronológica resumida:
+
+1. **Aba Biblioteca vazia/quebrada no popup de adicionar música** — mismatch de nomes de campo entre frontend e o schema real do Supabase (`title`/`duration` vs `titulo`/`duracao_seg`).
+2. **Causa raiz mais profunda do mesmo bug**: um commit feito direto na VM (nunca enviado ao GitHub) deixou o `git pull` do deploy automático travado silenciosamente por horas — a VM rodava código antigo sem a `SUPABASE_SERVICE_ROLE_KEY`, e todas as gravações no Supabase eram bloqueadas por RLS sem nenhum erro visível. Corrigido o desalinhamento do git da VM e adicionado log de erro real nas escritas do Supabase (antes, várias falhavam em silêncio).
+3. **Mesma causa raiz encontrada de novo, duas vezes**: a sala seedada (`comuna-roots`) nunca tinha sido persistida na tabela `rooms` do Supabase (só salas criadas pelo fluxo normal recebiam isso) — quebrava silenciosamente qualquer feature com chave estrangeira pra `rooms.id`: primeiro descoberto via `room_tracks`/biblioteca, depois de novo via favoritos (`user_favorite_rooms`). Corrigido na origem (`seedRooms` agora grava no Supabase) e com backfill manual dos dados já existentes.
+4. **Fila "riscando" músicas já tocadas** — removido, a pedido, o estilo visual que fazia a fila parecer "consumida".
+5. **Player minimizado no mobile não ficava do tamanho certo, controles não escondiam sozinhos, player não encolhia ao rolar a tela pra ver a fila** — três ajustes de UI/CSS separados.
+6. **Áudio parava ao minimizar o app no celular** — a investigação mais longa da sessão. Passou por: Media Session API com action handlers reais (antes só tinha metadata), elemento `<audio>` dedicado pro modo só-áudio (depois revertido), e finalmente Picture-in-Picture automático com um único `<video>` sempre ativo — a abordagem que realmente aproveita a proteção do SO contra apps mortos em segundo plano. Identificado que o MIUI (Xiaomi) mata o processo mesmo assim, fora do alcance de qualquer ajuste em JS; documentado o caminho de configurações de bateria como mitigação real.
+7. **Comportamento de sala vazia** — decisão de produto revista de "reiniciar do zero" para "pausar e retomar do ponto exato", documentada com as alternativas descartadas em `docs/comportamento-playback.md`. Encontrado e corrigido, no processo, um bug real de salto de posição de vários minutos (causa raiz: latência de detecção de desconexão do Socket.IO).
+8. **Fila volta para a primeira música ao terminar a última** (loop), tanto no avanço reportado pelo cliente quanto no failsafe do servidor.
+9. **Popup com lista de usuários na sala** — texto "X ouvindo" virou clicável.
+10. **Badge de mensagem não lida no chat** — implementado, e depois corrigido um falso positivo (mensagens antigas já lidas contando como novas por uma corrida entre conexão do socket e chegada do histórico real).
+11. **Mensagens de chat expiram após 24h** — decisão de não guardar histórico de chat indefinidamente.
+12. **Busca de música mostrava uma faixa falsa fixa no código em vez de erro** — sobra de modo demo/desenvolvimento que mascarava falhas reais de rede/timeout do extrator.
+13. **Menus de Configurações/Sleep Timer renderizando atrás do player** — bug de contexto de empilhamento CSS (`z-index`) no cabeçalho da sala.
+14. **Botão de voltar música** adicionado no player e no Picture-in-Picture (só existia o de avançar).
+15. **Exploração descartada**: empacotar o app com Capacitor para ganhar background audio nativo de verdade — tecnicamente viável e reaproveitaria todo o código React/TS, mas descartado por não compensar o esforço pro escopo de projeto pessoal/estudo sem intenção de publicar em loja.
