@@ -6,6 +6,11 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+  ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+  EXTRACTOR_ADMIN_TOKEN: ${{ secrets.EXTRACTOR_ADMIN_TOKEN }}
+
 jobs:
   deploy:
     name: Deploy Backend
@@ -17,8 +22,13 @@ jobs:
           host: ${{ secrets.GCP_HOST }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+          envs: ADMIN_USERNAME,ADMIN_PASSWORD,EXTRACTOR_ADMIN_TOKEN
           script: |
             cd radio-video
             git pull
+            # Garante as vars de admin no .env da VM (sem duplicar)
+            grep -q '^ADMIN_USERNAME=' .env 2>/dev/null || echo "ADMIN_USERNAME=$ADMIN_USERNAME" >> .env
+            grep -q '^ADMIN_PASSWORD=' .env 2>/dev/null || echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> .env
+            grep -q '^EXTRACTOR_ADMIN_TOKEN=' .env 2>/dev/null || echo "EXTRACTOR_ADMIN_TOKEN=$EXTRACTOR_ADMIN_TOKEN" >> .env
             sudo docker-compose down
             sudo docker-compose up -d --build
