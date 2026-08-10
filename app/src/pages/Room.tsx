@@ -5,7 +5,7 @@ import { useUserStore } from '../store/useUserStore';
 import { useRoomsStore } from '../store/useRoomsStore';
 import AddMusicModal from '../components/AddMusicModal';
 import Avatar from '../components/Avatar';
-import { Play, Pause, SkipForward, Plus, MessageCircle, Users, ChevronLeft, Send, Video, PictureInPicture2, Mic2, Headphones, ChevronUp, ChevronDown, BellOff, BellRing, Moon, Settings, Trash2, Volume2, VolumeX, AlertTriangle, X } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Plus, MessageCircle, Users, ChevronLeft, Send, Video, PictureInPicture2, Mic2, Headphones, ChevronUp, ChevronDown, BellOff, BellRing, Moon, Settings, Trash2, Volume2, VolumeX, AlertTriangle, X } from 'lucide-react';
 import { getServerTime } from '../data/realtime';
 
 const VAPID_PUBLIC_KEY = 'BD29BGxbHjhrzUQrUHLiAaRJZDhr7fRP0F3PFtPGpCHLaGjEPKi-Ril1heXJwVOa_3GV-exRHHo4y8cROaaZGhY';
@@ -389,15 +389,16 @@ export default function Room() {
       if (playback.status === 'playing') togglePlay();
     });
     navigator.mediaSession.setActionHandler('nexttrack', isRadialista && currentTrack ? () => handleNextTrack() : null);
-    navigator.mediaSession.setActionHandler('previoustrack', null);
+    navigator.mediaSession.setActionHandler('previoustrack', isRadialista && currentTrack ? () => handlePrevTrack() : null);
     navigator.mediaSession.setActionHandler('stop', null);
 
     return () => {
       navigator.mediaSession.setActionHandler('play', null);
       navigator.mediaSession.setActionHandler('pause', null);
       navigator.mediaSession.setActionHandler('nexttrack', null);
+      navigator.mediaSession.setActionHandler('previoustrack', null);
     };
-  }, [playback.status, isRadialista, currentTrack, presence.length]);
+  }, [playback.status, isRadialista, currentTrack, presence.length, queue]);
 
   if (!user) return <div className="p-8 text-center text-white">Carregando...</div>;
 
@@ -451,6 +452,13 @@ export default function Room() {
   const handlePlayTrack = (trackId: string) => {
     if (!isRadialista) return;
     setPlaybackStatus('playing', trackId, 0);
+  };
+
+  const handlePrevTrack = () => {
+    if (!isRadialista || !currentTrack || queue.length === 0) return;
+    const currentIndex = queue.findIndex(t => t.id === currentTrack.id);
+    const prevTrack = queue[currentIndex - 1] || queue[queue.length - 1];
+    handlePlayTrack(prevTrack.id);
   };
 
   const handleSeekStart = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -745,14 +753,21 @@ export default function Room() {
 
                 {/* Overlay Controls */}
                 <div className={`absolute inset-0 bg-black/40 transition-opacity z-20 flex items-center justify-center gap-4 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                  <button 
+                  <button
+                    onClick={handlePrevTrack}
+                    disabled={!isRadialista}
+                    className="w-12 h-12 bg-white/20 text-white rounded-full flex items-center justify-center hover:bg-white/30 transition-colors disabled:opacity-50"
+                  >
+                    <SkipBack size={24} fill="currentColor" />
+                  </button>
+                  <button
                     onClick={togglePlay}
                     disabled={!isRadialista}
                     className="w-16 h-16 bg-[#1db954] text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform disabled:opacity-50 disabled:bg-gray-500"
                   >
                     {playback.status === 'playing' ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
                   </button>
-                  <button 
+                  <button
                     onClick={handleNextTrack}
                     disabled={!isRadialista}
                     className="w-12 h-12 bg-white/20 text-white rounded-full flex items-center justify-center hover:bg-white/30 transition-colors disabled:opacity-50"
