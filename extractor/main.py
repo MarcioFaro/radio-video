@@ -6,13 +6,16 @@ import glob
 import logging
 import asyncio
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 import yt_dlp
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
 
 app = FastAPI(title="Radio Video Extractor")
 
@@ -32,7 +35,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# O extrator fica atras do Caddy (proxy reverso via rede interna do Docker),
+# entao request.client.host seria sempre o IP do Caddy, nao do usuario real.
+# Le o X-Forwarded-For que o Caddy ja preenche por padrao.
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+limiter = Limiter(key_func=get_client_ip)
+app.state.limiter = limiter
+
+# Handler customizado (em vez do padrao do slowapi) pra manter o mesmo
+# formato {"error": {"code", "message"}} que o resto do extrator usa --
+# o frontend ja sabe mostrar uma mensagem especifica pro codigo rate_limited.
+def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return error_response("rate_limited", ERROR_MESSAGES["rate_limited"], status_code=429)
+
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
+
 VIDEO_ID_RE = re.compile(r"(?:v=|youtu\.be/|/shorts/|/embed/|/live/)([A-Za-z0-9_-]{11})")
+
+YOUTUBE_HOSTS = {
+    "youtube.com", "www.youtube.com", "m.youtube.com",
+    "music.youtube.com", "youtu.be", "www.youtu.be",
+}
+
+def is_youtube_url(url: str) -> bool:
+    try:
+        host = urlparse(url).hostname or ""
+    except ValueError:
+        return False
+    return host.lower() in YOUTUBE_HOSTS
 
 POT_BASE_URL = os.environ.get("POT_BASE_URL", "http://host.docker.internal:4416")
 PIPED_INSTANCES = os.environ.get(
@@ -234,11 +269,15 @@ def demo_payload(video_id: str) -> dict:
         "fallback": True,
     }
 
-def error_response(code: str, message: str):
-    return JSONResponse(status_code=422, content={"error": {"code": code, "message": message}})
+def error_response(code: str, message: str, status_code: int = 422):
+    return JSONResponse(status_code=status_code, content={"error": {"code": code, "message": message}})
 
 @app.post("/extract")
-def extract_url(req: ExtractRequest):
+@limiter.limit("15/minute")
+def extract_url(request: Request, req: ExtractRequest):
+    if not is_youtube_url(req.url):
+        return error_response("unsupported", ERROR_MESSAGES["unsupported"])
+
     video_id = get_video_id(req.url)
     if not video_id:
         return error_response("unsupported", ERROR_MESSAGES["unsupported"])
