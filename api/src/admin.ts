@@ -172,6 +172,7 @@ async function listMediaFiles() {
   try {
     const names = fs.readdirSync(DOWNLOADS_DIR);
     for (const name of names) {
+      if (name.endsWith('.info.json')) continue;
       const full = path.join(DOWNLOADS_DIR, name);
       let stat;
       try {
@@ -180,15 +181,20 @@ async function listMediaFiles() {
         continue;
       }
       if (!stat.isFile()) continue;
-      const base = name.replace(/\.[^.]+$/, '');
-      const isInfoJson = name.endsWith('.info.json');
-      const id = base;
+      const id = name.replace(/\.[^.]+$/, '');
+      let sizeBytes = stat.size;
+      try {
+        const ist = fs.statSync(path.join(DOWNLOADS_DIR, `${id}.info.json`));
+        if (ist.isFile()) sizeBytes += ist.size;
+      } catch {
+        /* sem arquivo de metadados do yt-dlp */
+      }
       files.push({
         name,
-        sizeBytes: stat.size,
+        sizeBytes,
         mtime: stat.mtimeMs,
         youtubeId: id,
-        isInfoJson,
+        isInfoJson: false,
         inUse: libraryIds.has(id) || queueIds.has(id),
       });
     }
@@ -205,13 +211,13 @@ async function listMediaFiles() {
 function storageAnalysis(files: Awaited<ReturnType<typeof listMediaFiles>>['files']) {
   const byExt = new Map<string, number>();
   for (const f of files) {
-    const ext = f.isInfoJson ? 'info.json' : path.extname(f.name).slice(1) || 'sem-ext';
+    const ext = path.extname(f.name).slice(1) || 'sem-ext';
     byExt.set(ext, (byExt.get(ext) || 0) + f.sizeBytes);
   }
   const byFormat = Array.from(byExt.entries()).map(([ext, size]) => ({
     ext,
     size,
-    count: files.filter((f) => (f.isInfoJson ? 'info.json' : path.extname(f.name).slice(1) || 'sem-ext') === ext).length,
+    count: files.filter((f) => (path.extname(f.name).slice(1) || 'sem-ext') === ext).length,
   }));
   const top10 = files.slice(0, 10).map((f) => ({ name: f.name, sizeBytes: f.sizeBytes, inUse: f.inUse }));
   return { byFormat, top10 };
@@ -634,6 +640,14 @@ export function registerAdminRoutes(fastify: FastifyInstance, io: Server) {
       return reply.status(404).send({ error: { code: 'not_found', message: 'Arquivo não encontrado.' } });
     }
     fs.unlinkSync(full);
+    if (!safe.endsWith('.info.json')) {
+      const pair = path.join(DOWNLOADS_DIR, `${safe.replace(/\.[^.]+$/, '')}.info.json`);
+      try {
+        if (fs.existsSync(pair)) fs.unlinkSync(pair);
+      } catch {
+        /* segue mesmo se o .info.json não for apagado */
+      }
+    }
     recordActivity('admin_action', { actor: 'admin', detail: `Mídia excluída: ${safe}` });
     return { status: 'ok' };
   });
