@@ -27,7 +27,7 @@ interface RoomMeta {
 
 const metaByRoom = new Map<string, RoomMeta>();
 const listenersByRoom = new Map<string, Set<() => void>>();
-const roomEventListeners = new Set<(ev: { type: 'room_closed' | 'room_updated'; payload: any }) => void>();
+const roomEventListeners = new Set<(ev: { type: 'room_closed' | 'room_updated' | 'room_deleted'; payload: any }) => void>();
 
 let currentRoomId: string | null = null;
 let wired = false;
@@ -114,6 +114,12 @@ function wireSocket(): void {
     roomEventListeners.forEach((cb) => cb({ type: 'room_closed', payload }));
   });
 
+  // Emitido globalmente quando uma sala é excluída pelo admin — permite que a
+  // lista da home remova a sala na hora, sem precisar recarregar a página.
+  socket.on('room_deleted', (payload: any) => {
+    roomEventListeners.forEach((cb) => cb({ type: 'room_deleted', payload }));
+  });
+
   socket.on('room_updated', (payload: { name?: string; codigo_convite?: string }) => {
     if (currentRoomId) {
       const prev = metaByRoom.get(currentRoomId);
@@ -128,7 +134,7 @@ function wireSocket(): void {
 }
 
 export function subscribeRoomEvents(
-  cb: (ev: { type: 'room_closed' | 'room_updated'; payload: any }) => void
+  cb: (ev: { type: 'room_closed' | 'room_updated' | 'room_deleted'; payload: any }) => void
 ): () => void {
   wireSocket();
   roomEventListeners.add(cb);

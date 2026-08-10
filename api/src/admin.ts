@@ -19,6 +19,7 @@ import {
   addTrackToRoomQueue,
   removeTrackFromRoomQueue,
   serializeRoomsForBackup,
+  Room,
 } from './store';
 import { getRecentLogs, log } from './logger';
 import { getRecentActivity, recordActivity } from './activity';
@@ -255,6 +256,7 @@ async function listRooms() {
     const { data } = await supabase.from('rooms').select('*');
     dbRooms = data || [];
   }
+  const dbIds = new Set<string>(dbRooms.map((r) => r.id));
 
   const favoritesCount = new Map<string, number>();
   const queueCount = new Map<string, number>();
@@ -267,27 +269,59 @@ async function listRooms() {
     for (const r of rt.data || []) queueCount.set(r.room_id, (queueCount.get(r.room_id) || 0) + 1);
   }
 
+  const roomToRow = (room: Room, inDb: boolean) => {
+    const radialista = room.radialista_id
+      ? Array.from(room.users.values()).find((u) => u.id === room.radialista_id)
+      : null;
+    const current = room.queue.find((t) => t.id === room.playback.currentTrackId);
+    return {
+      id: room.id,
+      name: room.name,
+      codigo_convite: room.codigo_convite || '',
+      inDb,
+      active: true,
+      usersCount: room.users.size,
+      radialistaName: radialista ? radialista.name : null,
+      queueCount: room.queue.length,
+      historyCount: room.history.length,
+      favoritesCount: favoritesCount.get(room.id) || 0,
+      playbackStatus: room.playback.status,
+      playingTrack: current?.titulo ?? null,
+      users: Array.from(room.users.values()).map((u) => ({ id: u.id, name: u.name })),
+    };
+  };
+
   const merged = dbRooms.map((r) => {
     const active = rooms.get(r.id);
-    const radialista = active?.radialista_id
-      ? Array.from(active.users.values()).find((u) => u.id === active.radialista_id)
-      : null;
-    const current = active?.queue.find((t) => t.id === active?.playback.currentTrackId);
-    return {
-      id: r.id,
-      name: r.name,
-      codigo_convite: r.codigo_convite || '',
-      active: !!active,
-      usersCount: active?.users.size || 0,
-      radialistaName: radialista ? radialista.name : null,
-      queueCount: active?.queue.length ?? queueCount.get(r.id) ?? 0,
-      historyCount: active?.history.length ?? 0,
-      favoritesCount: favoritesCount.get(r.id) || 0,
-      playbackStatus: active?.playback.status ?? null,
-      playingTrack: current?.titulo ?? null,
-      users: active ? Array.from(active.users.values()).map((u) => ({ id: u.id, name: u.name })) : [],
-    };
+    if (!active) {
+      return {
+        id: r.id,
+        name: r.name,
+        codigo_convite: r.codigo_convite || '',
+        inDb: true,
+        active: false,
+        usersCount: 0,
+        radialistaName: null,
+        queueCount: queueCount.get(r.id) ?? 0,
+        historyCount: 0,
+        favoritesCount: favoritesCount.get(r.id) || 0,
+        playbackStatus: null,
+        playingTrack: null,
+        users: [],
+      };
+    }
+    return roomToRow(active, true);
   });
+
+  // Salas que só existem em memória (foram excluídas do Supabase fora do admin,
+  // ex.: direto no banco) também entram na listagem — sem isso ficam "órfãs"
+  // invisíveis no admin mas continuam aparecendo na home, que lê a memória.
+  for (const room of rooms.values()) {
+    if (!dbIds.has(room.id)) {
+      merged.push(roomToRow(room, false));
+    }
+  }
+
   merged.sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0));
   return merged;
 }
@@ -607,6 +641,9 @@ export function registerAdminRoutes(fastify: FastifyInstance, io: Server) {
     const existed = await deleteRoomCompletely(id);
     io.to(id).emit('room_closed', { reason: 'Sala excluída pelo administrador.' });
     io.in(id).socketsLeave(id);
+    // Avisa todos os clientes (inclusive quem está na home) para remover a sala
+    // da lista — o 'room_closed' acima só chega em quem está dentro da sala.
+    io.emit('room_deleted', { id });
     recordActivity('admin_action', { actor: 'admin', detail: `Sala excluída: ${id}` });
     return { status: 'ok', existed };
   });

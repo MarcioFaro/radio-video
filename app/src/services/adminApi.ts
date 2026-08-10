@@ -154,6 +154,7 @@ export interface AdminRoom {
   id: string;
   name: string;
   codigo_convite: string;
+  inDb: boolean;
   active: boolean;
   usersCount: number;
   radialistaName: string | null;

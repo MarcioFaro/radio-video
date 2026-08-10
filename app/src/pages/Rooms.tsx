@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../store/useUserStore';
 import { useRoomsStore } from '../store/useRoomsStore';
+import { subscribeRoomEvents } from '../data/realtime';
 import { LogOut, Plus, Users, ArrowRight, Mic2, Star, ShieldCheck } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://127.0.0.1:3005';
@@ -37,7 +38,7 @@ export default function Rooms() {
     }
   }, [user]);
 
-  useEffect(() => {
+  const loadRooms = useCallback(() => {
     fetch(`${BACKEND_URL}/rooms`)
       .then(res => res.json())
       .then(data => {
@@ -47,6 +48,21 @@ export default function Rooms() {
       })
       .catch(err => console.error('Error fetching live rooms:', err));
   }, []);
+
+  useEffect(() => {
+    loadRooms();
+  }, [loadRooms]);
+
+  // Se uma sala for excluída pelo admin enquanto a home está aberta, remove da
+  // lista imediatamente (o servidor emite 'room_deleted' globalmente).
+  useEffect(() => {
+    const unsub = subscribeRoomEvents((ev) => {
+      if (ev.type === 'room_deleted') {
+        loadRooms();
+      }
+    });
+    return unsub;
+  }, [loadRooms]);
 
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();

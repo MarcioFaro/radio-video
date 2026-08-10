@@ -173,6 +173,23 @@ export async function loadRooms() {
     }
 
     console.log(`[Supabase] Filas sincronizadas para ${(dbRooms || []).length} salas.`);
+
+    // Remove do estado em memória salas que não existem mais no Supabase
+    // (ex.: excluídas direto no banco). Sem isso, salas órfãs continuam
+    // aparecendo na home após um restart ou o "Recarregar" do admin. Salas com
+    // gente conectada são preservadas (são salas legítimas ao vivo).
+    const dbIds = new Set((dbRooms || []).map((r: any) => r.id));
+    let pruned = 0;
+    for (const [id, room] of rooms.entries()) {
+      if (!dbIds.has(id) && room.users.size === 0) {
+        rooms.delete(id);
+        pruned += 1;
+      }
+    }
+    if (pruned > 0) {
+      scheduleSave();
+      console.log(`[Supabase] Removidas ${pruned} sala(s) órfã(s) do estado em memória.`);
+    }
   } catch (e) {
     console.error('[Supabase] Erro inesperado ao carregar rooms:', e);
   }

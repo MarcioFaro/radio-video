@@ -711,6 +711,7 @@ export default function Admin() {
                           <p className="font-medium text-gray-200 truncate">{r.name}</p>
                           {r.active && <Badge color="green">ao vivo</Badge>}
                           {r.playbackStatus === 'playing' ? <Badge color="yellow">tocando</Badge> : <Badge color="gray">pausada</Badge>}
+                          {!r.inDb && <Badge color="gray">só memória</Badge>}
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">
                           {r.id} · Código: <span className="text-gray-300 font-mono">{r.codigo_convite}</span> ·{' '}
