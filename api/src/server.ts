@@ -73,8 +73,16 @@ async function seedRooms(): Promise<void> {
 
 const fastify = Fastify({ logger: true });
 
+// Origens permitidas a chamar a API/Socket.IO. Ajuste aqui se o domínio do
+// frontend mudar ou se precisar liberar outra origem (ex: preview da Vercel).
+const ALLOWED_ORIGINS = [
+  'https://radio-video-chi.vercel.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
+
 fastify.register(fastifyCors, {
-  origin: '*',
+  origin: ALLOWED_ORIGINS,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 });
 
@@ -200,7 +208,7 @@ async function sendPushToRoom(roomId: string, senderId: string, payload: any) {
 
 const io = new Server(fastify.server, {
   cors: {
-    origin: "*",
+    origin: ALLOWED_ORIGINS,
     methods: ["GET", "POST"]
   }
 });
