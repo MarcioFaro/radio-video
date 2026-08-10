@@ -214,8 +214,8 @@ export interface ActivityEntry {
 }
 
 export const adminApi = {
-  login: (password: string) =>
-    request<{ token: string; expiresAt: number }>('/login', { method: 'POST', body: { password }, timeoutMs: 10000 }),
+  login: (username: string, password: string) =>
+    request<{ token: string; expiresAt: number }>('/login', { method: 'POST', body: { username, password }, timeoutMs: 10000 }),
   logout: () => request('/logout', { method: 'POST' }),
   overview: () => request<Overview>('/overview'),
   tables: () => request<{ tables: TableInfo[] }>('/tables'),

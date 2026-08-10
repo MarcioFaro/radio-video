@@ -178,6 +178,7 @@ const tableHead = 'text-left text-xs uppercase tracking-wider text-gray-500 font
 // ── Tela de login ────────────────────────────────────────────────────────────
 
 function AdminGate({ onAuthed }: { onAuthed: () => void }) {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -187,7 +188,7 @@ function AdminGate({ onAuthed }: { onAuthed: () => void }) {
     setBusy(true);
     setError('');
     try {
-      const res = await adminApi.login(password);
+      const res = await adminApi.login(username, password);
       setAdminToken(res.token);
       onAuthed();
     } catch (err: any) {
@@ -209,12 +210,19 @@ function AdminGate({ onAuthed }: { onAuthed: () => void }) {
         </div>
         <form onSubmit={submit} className="flex flex-col gap-4">
           <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Usuário"
+            className="w-full bg-[#282828] text-white border border-transparent rounded-lg px-4 py-3 focus:outline-none focus:border-[#1db954] focus:ring-1 focus:ring-[#1db954] transition-all placeholder:text-gray-600"
+            autoFocus
+          />
+          <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Senha de administrador"
             className="w-full bg-[#282828] text-white border border-transparent rounded-lg px-4 py-3 focus:outline-none focus:border-[#1db954] focus:ring-1 focus:ring-[#1db954] transition-all placeholder:text-gray-600"
-            autoFocus
           />
           {error && <p className="text-sm text-red-400">{error}</p>}
           <button

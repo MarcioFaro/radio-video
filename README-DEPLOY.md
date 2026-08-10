@@ -43,7 +43,8 @@ A página **Central de Admin** (`/admin`) permite ver tabelas do Supabase, geren
 O Docker Compose agora lê duas variáveis novas do `.env` da VM. Sem elas, a central responde **503 (desabilitada)**. No SSH da VM, dentro de `radio-video`, edite o `.env` e adicione:
 
 ```bash
-# Senha da Central de Admin (escolha uma senha forte)
+# Usuario + senha da Central de Admin (ADMIN_USERNAME e opcional; se vazio, so a senha)
+ADMIN_USERNAME=marcio.faro
 ADMIN_PASSWORD=SUA_SENHA_FORTE
 
 # Token interno para a API consultar logs/extração no extrator (qualquer string longa)

@@ -25,6 +25,8 @@ import { getRecentActivity, recordActivity } from './activity';
 import { sendPushToSubs } from './push';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+// Se definida, o login admin exige usuário e senha. Se vazia, só a senha.
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || '';
 const SESSION_TTL_MS = (Number(process.env.ADMIN_SESSION_HOURS) || 24) * 60 * 60 * 1000;
 const DOWNLOADS_DIR = process.env.DOWNLOADS_DIR || '/downloads';
 const EXTRACTOR_BASE = process.env.EXTRACTOR_BASE || 'http://extractor:8000';
@@ -382,13 +384,15 @@ async function loginHandler(request: FastifyRequest, reply: FastifyReply) {
     });
   }
 
-  const { password } = (request.body || {}) as any;
-  if (!password || !safeEqual(password, ADMIN_PASSWORD)) {
+  const { username, password } = (request.body || {}) as any;
+  const userOk = !ADMIN_USERNAME || (typeof username === 'string' && username === ADMIN_USERNAME);
+  const passOk = typeof password === 'string' && password.length > 0 && safeEqual(password, ADMIN_PASSWORD);
+  if (!userOk || !passOk) {
     const cur = loginAttempts.get(ip);
     if (cur) cur.count++;
     else loginAttempts.set(ip, { count: 1, firstTs: now });
-    recordActivity('admin_login_failed', { actor: 'admin', detail: `IP ${ip}` });
-    return reply.status(401).send({ error: { code: 'invalid_password', message: 'Senha incorreta.' } });
+    recordActivity('admin_login_failed', { actor: username || 'admin', detail: `IP ${ip}` });
+    return reply.status(401).send({ error: { code: 'invalid_credentials', message: 'Credenciais inválidas.' } });
   }
 
   loginAttempts.delete(ip);
