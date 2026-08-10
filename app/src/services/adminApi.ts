@@ -183,6 +183,7 @@ export interface MediaFile {
   sizeBytes: number;
   mtime: number;
   youtubeId: string;
+  title: string | null;
   isInfoJson: boolean;
   inUse: boolean;
 }

@@ -151,12 +151,20 @@ async function getVmMetrics() {
 async function listMediaFiles() {
   let libraryIds = new Set<string>();
   let queueIds = new Set<string>();
+  const titles = new Map<string, string>();
   if (supabase) {
     const [lib, qt] = await Promise.all([
-      supabase.from('tracks_library').select('youtube_id'),
+      supabase.from('tracks_library').select('youtube_id, titulo'),
       supabase.from('room_tracks').select('youtube_id'),
     ]);
-    if (!lib.error) libraryIds = new Set((lib.data || []).map((r: any) => r.youtube_id));
+    if (!lib.error) {
+      for (const r of lib.data || []) {
+        if (r.youtube_id) {
+          libraryIds.add(r.youtube_id);
+          if (r.titulo) titles.set(r.youtube_id, r.titulo);
+        }
+      }
+    }
     if (!qt.error) queueIds = new Set((qt.data || []).map((r: any) => r.youtube_id));
   }
 
@@ -165,6 +173,7 @@ async function listMediaFiles() {
     sizeBytes: number;
     mtime: number;
     youtubeId: string;
+    title: string | null;
     isInfoJson: boolean;
     inUse: boolean;
   }> = [];
@@ -194,6 +203,7 @@ async function listMediaFiles() {
         sizeBytes,
         mtime: stat.mtimeMs,
         youtubeId: id,
+        title: titles.get(id) || null,
         isInfoJson: false,
         inUse: libraryIds.has(id) || queueIds.has(id),
       });

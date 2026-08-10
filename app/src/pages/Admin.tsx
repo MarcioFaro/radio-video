@@ -914,20 +914,23 @@ export default function Admin() {
                 </div>
                 {media?.files.map((f) => (
                   <div key={f.name} className="flex items-center gap-3 px-3 py-2 border-b border-white/5 text-sm hover:bg-white/[0.02]">
-                    <span className="flex-1 truncate text-gray-300 font-mono text-xs">{f.name}</span>
-                    <span className="w-24 text-right text-gray-400">{fmtBytes(f.sizeBytes)}</span>
-                    <span className="w-28 text-right text-gray-500 text-xs">{fmtDate(f.mtime)}</span>
-                    <span className="w-20 text-right">
+                    <span className="flex-1 min-w-0">
+                      {f.title && <span className="block truncate text-white">{f.title}</span>}
+                      <span className={`block truncate font-mono text-xs ${f.title ? 'text-gray-500' : 'text-gray-300'}`}>{f.name}</span>
+                    </span>
+                    <span className="w-24 text-right text-gray-400 shrink-0">{fmtBytes(f.sizeBytes)}</span>
+                    <span className="w-28 text-right text-gray-500 text-xs shrink-0">{fmtDate(f.mtime)}</span>
+                    <span className="w-20 text-right shrink-0">
                       {f.inUse ? <Badge color="green">em uso</Badge> : <Badge color="red">órfão</Badge>}
                     </span>
-                    <span className="w-10 text-right">
+                    <span className="w-10 text-right shrink-0">
                       <Btn
                         variant="danger"
                         title="Excluir arquivo"
                         onClick={() =>
                           openConfirm(
                             'Excluir arquivo',
-                            `Apagar "${f.name}" do disco? Se estiver em uso, o player quebrará para quem estiver tocando.`,
+                            `Apagar "${f.title || f.name}" do disco? Se estiver em uso, o player quebrará para quem estiver tocando.`,
                             async () => {
                               await adminApi.deleteMedia(f.name);
                               setMedia((prev) =>
