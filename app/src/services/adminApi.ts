@@ -185,6 +185,7 @@ export interface MediaFile {
   youtubeId: string;
   title: string | null;
   isInfoJson: boolean;
+  quality: string | null;
   inUse: boolean;
 }
 

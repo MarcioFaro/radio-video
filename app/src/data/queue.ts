@@ -60,7 +60,7 @@ const EXTRACTOR_ERRORS: Record<string, string> = {
   unknown: 'Falha ao extrair o vídeo.',
 };
 
-export async function previewTrack(url: string): Promise<TrackPreview> {
+export async function previewTrack(url: string, quality: string = '360p'): Promise<TrackPreview> {
   let res: Response;
   try {
     const controller = new AbortController();
@@ -68,7 +68,7 @@ export async function previewTrack(url: string): Promise<TrackPreview> {
     res = await fetch(EXTRACTOR_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, quality }),
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -89,6 +89,7 @@ export async function previewTrack(url: string): Promise<TrackPreview> {
       duracao_seg: data.duracao_seg,
       audio_url: data.audio_url,
       video_url: data.video_url,
+      quality: data.quality ?? quality,
     };
   }
 

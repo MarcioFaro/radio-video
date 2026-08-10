@@ -6,6 +6,12 @@ import { X, Search, Loader2, Film, Library, Play } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://127.0.0.1:3005';
 
+const QUALITY_OPTIONS = [
+  { value: '360p', label: '360p' },
+  { value: '144p', label: '144p' },
+  { value: 'audio', label: 'Só áudio' },
+];
+
 interface AddMusicModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -14,6 +20,7 @@ interface AddMusicModalProps {
 export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
   const [activeTab, setActiveTab] = useState<'youtube' | 'library'>('youtube');
   const [url, setUrl] = useState('');
+  const [quality, setQuality] = useState('360p');
   const [preview, setPreview] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,6 +30,14 @@ export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
   
   const addTrack = useRoomStore((state) => state.addTrack);
   const user = useUserStore((state) => state.user);
+
+  useEffect(() => {
+    if (isOpen) {
+      setQuality('360p');
+      setPreview(null);
+      setError('');
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && activeTab === 'library') {
@@ -51,13 +66,19 @@ export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
     setError('');
     setPreview(null);
     try {
-      const data = await previewTrack(url);
+      const data = await previewTrack(url, quality);
       setPreview(data);
     } catch (err: any) {
       setError(err.message || 'Erro desconhecido');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleQualityChange = (q: string) => {
+    setQuality(q);
+    setPreview(null);
+    setError('');
   };
 
   const handleAddPreview = () => {
@@ -141,6 +162,23 @@ export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
                   {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
                 </button>
               </div>
+
+              <div className="flex gap-2">
+                {QUALITY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleQualityChange(opt.value)}
+                    className={`flex-1 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors ${
+                      quality === opt.value
+                        ? 'bg-[#1db954]/20 border-[#1db954] text-[#1db954]'
+                        : 'bg-[#282828] border-white/5 text-gray-400 hover:text-white hover:border-white/20'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
               
               {error && <p className="text-red-400 text-sm">{error}</p>}
 
@@ -151,6 +189,8 @@ export default function AddMusicModal({ isOpen, onClose }: AddMusicModalProps) {
                     <h4 className="text-white font-medium text-sm line-clamp-2">{preview.titulo}</h4>
                     <p className="text-xs text-gray-400 mt-1">
                       {Math.floor(preview.duracao_seg / 60)}:{String(preview.duracao_seg % 60).padStart(2, '0')}
+                      {' · '}
+                      {QUALITY_OPTIONS.find((o) => o.value === preview.quality)?.label ?? '360p'}
                     </p>
                   </div>
                 </div>

@@ -31,6 +31,7 @@ export interface TrackPreview {
   duracao_seg: number;
   audio_url: string;
   video_url?: string;
+  quality?: string;
 }
 
 export interface ChatMessage {

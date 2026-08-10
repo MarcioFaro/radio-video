@@ -175,6 +175,7 @@ async function listMediaFiles() {
     youtubeId: string;
     title: string | null;
     isInfoJson: boolean;
+    quality: string | null;
     inUse: boolean;
   }> = [];
 
@@ -190,11 +191,25 @@ async function listMediaFiles() {
         continue;
       }
       if (!stat.isFile()) continue;
-      const id = name.replace(/\.[^.]+$/, '');
+      const stem = name.replace(/\.[^.]+$/, '');
+      const idMatch = name.match(/^([A-Za-z0-9_-]{11})/);
+      const youtubeId = idMatch ? idMatch[1] : stem;
       let sizeBytes = stat.size;
+      let quality: string | null = null;
       try {
-        const ist = fs.statSync(path.join(DOWNLOADS_DIR, `${id}.info.json`));
+        const ist = fs.statSync(path.join(DOWNLOADS_DIR, `${stem}.info.json`));
         if (ist.isFile()) sizeBytes += ist.size;
+        try {
+          const raw = JSON.parse(fs.readFileSync(path.join(DOWNLOADS_DIR, `${stem}.info.json`), 'utf-8'));
+          const h = raw.height;
+          if (typeof h === 'number' && h > 0) {
+            quality = `${h}p`;
+          } else if (typeof raw.format_note === 'string' && raw.format_note) {
+            quality = raw.format_note;
+          }
+        } catch {
+          /* metadados ilegíveis */
+        }
       } catch {
         /* sem arquivo de metadados do yt-dlp */
       }
@@ -202,10 +217,11 @@ async function listMediaFiles() {
         name,
         sizeBytes,
         mtime: stat.mtimeMs,
-        youtubeId: id,
-        title: titles.get(id) || null,
+        youtubeId,
+        title: titles.get(youtubeId) || null,
         isInfoJson: false,
-        inUse: libraryIds.has(id) || queueIds.has(id),
+        quality,
+        inUse: libraryIds.has(youtubeId) || queueIds.has(youtubeId),
       });
     }
   } catch {

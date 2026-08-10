@@ -907,6 +907,7 @@ export default function Admin() {
               <div className="max-h-96 overflow-y-auto">
                 <div className="flex items-center gap-3 px-3 py-2 text-xs uppercase tracking-wider text-gray-500 font-medium border-b border-white/10">
                   <span className="flex-1">Arquivo</span>
+                  <span className="w-16 text-right">Qual.</span>
                   <span className="w-24 text-right">Tamanho</span>
                   <span className="w-28 text-right">Modificado</span>
                   <span className="w-20 text-right">Status</span>
@@ -918,6 +919,7 @@ export default function Admin() {
                       {f.title && <span className="block truncate text-white">{f.title}</span>}
                       <span className={`block truncate font-mono text-xs ${f.title ? 'text-gray-500' : 'text-gray-300'}`}>{f.name}</span>
                     </span>
+                    <span className="w-16 text-right text-gray-400 text-xs shrink-0">{f.quality ?? '—'}</span>
                     <span className="w-24 text-right text-gray-400 shrink-0">{fmtBytes(f.sizeBytes)}</span>
                     <span className="w-28 text-right text-gray-500 text-xs shrink-0">{fmtDate(f.mtime)}</span>
                     <span className="w-20 text-right shrink-0">

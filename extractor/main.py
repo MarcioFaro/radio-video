@@ -117,6 +117,17 @@ class MetaRequest(BaseModel):
 
 class ExtractRequest(BaseModel):
     url: str
+    quality: str = "360p"
+
+# Qualidades suportadas no seletor do app. Cada uma tem o formato yt-dlp e um
+# sufixo de arquivo; 360p usa os nomes legados ({id}.mp4) pra nao quebrar os
+# arquivos ja baixados. 144p e audio usam sufixo ({id}.144.mp4, {id}.audio.m4a)
+# pra coexistirem em disco sem sobrescrever uns aos outros.
+QUALITY_OPTS = {
+    "360p": {"format": "best[height<=360]/bestaudio/best", "suffix": ""},
+    "144p": {"format": "best[height<=144]/bestaudio/best", "suffix": ".144"},
+    "audio": {"format": "bestaudio/best", "suffix": ".audio"},
+}
 
 def get_video_id(url: str) -> Optional[str]:
     match = VIDEO_ID_RE.search(url)
@@ -195,14 +206,17 @@ ERROR_MESSAGES = {
     "bot_check": "O YouTube pediu confirmação de bot (Sign in to confirm). Tente de novo em alguns minutos.",
     "forbidden": "Acesso negado pelo YouTube (403). Tente de novo em instantes.",
     "unsupported": "Link do YouTube não reconhecido.",
+    "invalid_quality": "Qualidade inválida. Escolha 360p, 144p ou áudio.",
     "unknown": "Falha ao extrair o vídeo.",
 }
 
 # ---------------------------------------------------------------------------
 # Extração e Cache via yt-dlp
 # ---------------------------------------------------------------------------
-def extract_with_ytdlp(url: str, video_id: str) -> dict:
-    json_path = os.path.join(DOWNLOADS_DIR, f"{video_id}.info.json")
+def extract_with_ytdlp(url: str, video_id: str, quality: str = "360p") -> dict:
+    opts_q = QUALITY_OPTS.get(quality) or QUALITY_OPTS["360p"]
+    suffix = opts_q["suffix"]
+    json_path = os.path.join(DOWNLOADS_DIR, f"{video_id}{suffix}.info.json")
     
     # 1. Verifica se já existe em disco
     if os.path.exists(json_path):
@@ -211,7 +225,7 @@ def extract_with_ytdlp(url: str, video_id: str) -> dict:
                 info = json.load(f)
             
             ext = info.get("ext", "mp4")
-            local_url = f"https://comunaradio.duckdns.org/media/{video_id}.{ext}"
+            local_url = f"https://comunaradio.duckdns.org/media/{video_id}{suffix}.{ext}"
             info["url"] = local_url
             
             # Toca no atime de todos os arquivos relacionados para o LRU não apagar
@@ -223,10 +237,10 @@ def extract_with_ytdlp(url: str, video_id: str) -> dict:
             logging.warning("Erro ao ler JSON de cache %s: %s", json_path, e)
             # Se falhou, segue para o download
 
-    # 2. Não existe em cache, faz o download do vídeo em até 360p com áudio
+    # 2. Não existe em cache, faz o download na qualidade escolhida
     opts = {
-        "format": "best[height<=360]/bestaudio/best",
-        "outtmpl": os.path.join(DOWNLOADS_DIR, "%(id)s.%(ext)s"),
+        "format": opts_q["format"],
+        "outtmpl": os.path.join(DOWNLOADS_DIR, f"%(id)s{suffix}.%(ext)s"),
         "writeinfojson": True,
         "quiet": True,
         "no_warnings": True,
@@ -250,7 +264,7 @@ def extract_with_ytdlp(url: str, video_id: str) -> dict:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 ext = info.get("ext", "mp4")
-                info["url"] = f"https://comunaradio.duckdns.org/media/{info['id']}.{ext}"
+                info["url"] = f"https://comunaradio.duckdns.org/media/{info['id']}{suffix}.{ext}"
                 return info
         except Exception as e:
             last_error = e
@@ -356,8 +370,11 @@ def extract_url(request: Request, req: ExtractRequest):
     if not video_id:
         return error_response("unsupported", ERROR_MESSAGES["unsupported"])
 
+    if req.quality not in QUALITY_OPTS:
+        return error_response("invalid_quality", ERROR_MESSAGES["invalid_quality"])
+
     try:
-        info = extract_with_ytdlp(req.url, video_id)
+        info = extract_with_ytdlp(req.url, video_id, req.quality)
         local_url = info.get("url")
         payload = {
             "id": info.get("id") or video_id,
@@ -368,6 +385,7 @@ def extract_url(request: Request, req: ExtractRequest):
             "audio_ext": info.get("ext") or "mp4",
             "video_url": local_url,
             "original_url": req.url,
+            "quality": req.quality,
             "source": "yt-dlp-cached",
         }
     except Exception as e:
