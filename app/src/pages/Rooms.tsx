@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../store/useUserStore';
 import { useRoomsStore } from '../store/useRoomsStore';
-import { LogOut, Plus, Users, ArrowRight, Mic2, Star } from 'lucide-react';
+import { LogOut, Plus, Users, ArrowRight, Mic2, Star, ShieldCheck } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://127.0.0.1:3005';
 
@@ -98,9 +98,18 @@ export default function Rooms() {
             <p className="font-bold text-white">{user?.name}</p>
           </div>
         </div>
-        <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-white transition-colors">
-          <LogOut size={20} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => navigate('/admin')}
+            className="p-2 text-gray-400 hover:text-[#1db954] transition-colors"
+            title="Central de Admin"
+          >
+            <ShieldCheck size={20} />
+          </button>
+          <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-white transition-colors">
+            <LogOut size={20} />
+          </button>
+        </div>
       </header>
 
       {/* Actions */}

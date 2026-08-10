@@ -6,7 +6,7 @@ import { useRoomsStore } from '../store/useRoomsStore';
 import AddMusicModal from '../components/AddMusicModal';
 import Avatar from '../components/Avatar';
 import { Play, Pause, SkipForward, SkipBack, Plus, MessageCircle, Users, ChevronLeft, Send, Video, PictureInPicture2, Mic2, Headphones, ChevronUp, ChevronDown, BellOff, BellRing, Moon, Settings, Trash2, Volume2, VolumeX, AlertTriangle, X } from 'lucide-react';
-import { getServerTime } from '../data/realtime';
+import { getServerTime, subscribeRoomEvents } from '../data/realtime';
 
 const VAPID_PUBLIC_KEY = 'BD29BGxbHjhrzUQrUHLiAaRJZDhr7fRP0F3PFtPGpCHLaGjEPKi-Ril1heXJwVOa_3GV-exRHHo4y8cROaaZGhY';
 const BACKEND_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://127.0.0.1:3005';
@@ -141,6 +141,21 @@ export default function Room() {
     
     return () => leaveRoom();
   }, [id, user]);
+
+  const [roomClosed, setRoomClosed] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeRoomEvents((ev) => {
+      if (ev.type === 'room_closed') {
+        leaveRoom();
+        const reason =
+          typeof ev.payload?.reason === 'string' ? ev.payload.reason : 'Sala encerrada pelo administrador.';
+        setRoomClosed(reason);
+        setTimeout(() => navigate('/rooms'), 1500);
+      }
+    });
+    return unsub;
+  }, [leaveRoom, navigate]);
 
   useEffect(() => {
     if (sleepMinutes === null) return;
@@ -560,7 +575,18 @@ export default function Room() {
   return (
     <div className="flex flex-col h-[100dvh] bg-[#121212] overflow-hidden relative">
 
-      
+      {/* Sala encerrada pelo admin */}
+      {roomClosed && (
+        <div className="absolute inset-0 z-[60] pointer-events-none flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="pointer-events-auto flex flex-col items-center gap-4 bg-[#181818] p-8 rounded-2xl shadow-2xl border border-red-500/20 max-w-sm text-center mx-4">
+            <AlertTriangle size={36} className="text-red-400" />
+            <h2 className="text-xl font-bold text-white">Sala encerrada</h2>
+            <p className="text-gray-400 text-sm">{roomClosed}</p>
+            <p className="text-gray-600 text-xs">Redirecionando para a lista de rádios...</p>
+          </div>
+        </div>
+      )}
+
       {/* Preview Overlay */}
       {previewMode && (
         <div className="absolute inset-0 z-50 pointer-events-none flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">

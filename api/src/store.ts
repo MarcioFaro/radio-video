@@ -5,7 +5,7 @@ import path from 'path';
 
 dotenv.config();
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+export const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const ROOMS_FILE = path.join(DATA_DIR, 'rooms.json');
 
 export interface User {
@@ -345,4 +345,177 @@ export function pickRadialista(room: Room): string | null {
     }
   }
   return oldestId;
+}
+
+// ── Helpers de administração ────────────────────────────────────────────────
+
+// Exclui uma sala por completo: remove do estado em memória e do Supabase
+// (favoritos, fila e a sala em si). Retorna true se a sala existia.
+export async function deleteRoomCompletely(roomId: string): Promise<boolean> {
+  const existed = rooms.delete(roomId);
+  scheduleSave();
+  if (supabase) {
+    const d1 = await supabase.from('user_favorite_rooms').delete().eq('room_id', roomId);
+    if (d1.error) console.error('[Supabase] Erro ao excluir favoritos da room:', d1.error.message);
+    const d2 = await supabase.from('room_tracks').delete().eq('room_id', roomId);
+    if (d2.error) console.error('[Supabase] Erro ao excluir fila da room:', d2.error.message);
+    const d3 = await supabase.from('rooms').delete().eq('id', roomId);
+    if (d3.error) console.error('[Supabase] Erro ao excluir room:', d3.error.message);
+  }
+  return existed;
+}
+
+export async function updateRoomInSupabase(roomId: string, patch: { name?: string; codigo_convite?: string }) {
+  const data: Record<string, string> = {};
+  if (patch.name) data.name = patch.name;
+  if (patch.codigo_convite) data.codigo_convite = patch.codigo_convite;
+  if (Object.keys(data).length === 0) return;
+
+  if (supabase) {
+    const { error } = await supabase.from('rooms').update(data).eq('id', roomId);
+    if (error) console.error('[Supabase] Erro ao editar room:', error.message);
+  }
+  const room = rooms.get(roomId);
+  if (room) {
+    if (patch.name) room.name = patch.name;
+    if (patch.codigo_convite) room.codigo_convite = patch.codigo_convite;
+    scheduleSave();
+  }
+}
+
+// Exclui um usuário: remove do Supabase (user, favoritos, push subs) e de todas
+// as salas ativas em memória.
+export async function deleteUserCompletely(userId: string): Promise<boolean> {
+  if (supabase) {
+    const u = await supabase.from('users').delete().eq('id', userId);
+    if (u.error) console.error('[Supabase] Erro ao excluir user:', u.error.message);
+    const f = await supabase.from('user_favorite_rooms').delete().eq('user_id', userId);
+    if (f.error) console.error('[Supabase] Erro ao excluir favoritos do user:', f.error.message);
+    const p = await supabase.from('push_subscriptions').delete().eq('user_id', userId);
+    if (p.error) console.error('[Supabase] Erro ao excluir push subs do user:', p.error.message);
+  }
+  let removed = false;
+  for (const room of rooms.values()) {
+    for (const [socketId, u] of room.users) {
+      if (u.id === userId) {
+        room.users.delete(socketId);
+        removed = true;
+      }
+    }
+  }
+  return removed || !!supabase;
+}
+
+// Exclui uma faixa da biblioteca e todas as referências em filas (Supabase +
+// memória). Retorna true se a faixa existia na biblioteca.
+export async function deleteLibraryTrackByYoutubeId(youtubeId: string): Promise<boolean> {
+  let existed = false;
+  if (supabase) {
+    const lib = await supabase.from('tracks_library').select('youtube_id').eq('youtube_id', youtubeId).maybeSingle();
+    existed = !!lib.data;
+    const rt = await supabase.from('room_tracks').delete().eq('youtube_id', youtubeId);
+    if (rt.error) console.error('[Supabase] Erro ao excluir room_tracks da faixa:', rt.error.message);
+    const t = await supabase.from('tracks_library').delete().eq('youtube_id', youtubeId);
+    if (t.error) console.error('[Supabase] Erro ao excluir faixa da biblioteca:', t.error.message);
+  }
+  for (const room of rooms.values()) {
+    room.queue = room.queue.filter((tr) => tr.youtube_video_id !== youtubeId);
+    room.history = room.history.filter((tr) => tr.youtube_video_id !== youtubeId);
+  }
+  scheduleSave();
+  return existed;
+}
+
+export async function updateLibraryTrack(youtubeId: string, patch: { titulo?: string; duracao_seg?: number }) {
+  const data: Record<string, unknown> = {};
+  if (patch.titulo) data.titulo = patch.titulo;
+  if (typeof patch.duracao_seg === 'number') data.duracao_seg = patch.duracao_seg;
+  if (Object.keys(data).length === 0) return;
+
+  if (supabase) {
+    const { error } = await supabase.from('tracks_library').update(data).eq('youtube_id', youtubeId);
+    if (error) console.error('[Supabase] Erro ao editar faixa:', error.message);
+  }
+  for (const room of rooms.values()) {
+    for (const tr of [...room.queue, ...room.history]) {
+      if (tr.youtube_video_id === youtubeId) {
+        if (patch.titulo) tr.titulo = patch.titulo;
+        if (typeof patch.duracao_seg === 'number') tr.duracao_seg = patch.duracao_seg;
+      }
+    }
+  }
+  scheduleSave();
+}
+
+// Adiciona uma música da biblioteca à fila de uma sala (via admin). Garante que
+// a sala exista em memória para propagar o evento em tempo real. Retorna a faixa
+// criada, ou null se a biblioteca/sala não existir.
+export async function addTrackToRoomQueue(roomId: string, youtubeId: string, adicionadoPor: string): Promise<Track | null> {
+  if (!supabase) return null;
+
+  const { data: lib, error: libErr } = await supabase
+    .from('tracks_library')
+    .select('*')
+    .eq('youtube_id', youtubeId)
+    .maybeSingle();
+  if (libErr || !lib) return null;
+
+  let room = rooms.get(roomId);
+  if (!room) {
+    const { data: dbRoom } = await supabase.from('rooms').select('*').eq('id', roomId).maybeSingle();
+    if (!dbRoom) return null;
+    room = getOrCreateRoom(roomId, dbRoom.name, 'admin');
+  }
+
+  const track: Track = {
+    id: Math.random().toString(36).substring(2, 9),
+    youtube_video_id: youtubeId,
+    titulo: lib.titulo,
+    thumbnail_url: lib.thumbnail_url || '',
+    duracao_seg: lib.duracao_seg || 0,
+    audio_url: lib.audio_url,
+    video_url: lib.video_url,
+    adicionado_por: adicionadoPor,
+  };
+  room.queue.push(track);
+  if (!room.playback.currentTrackId) {
+    room.playback.currentTrackId = track.id;
+    room.playback.timestamp = 0;
+    room.playback.updated_at = Date.now();
+  }
+  await saveTrackToSupabase(roomId, track);
+  scheduleSave();
+  return track;
+}
+
+// Remove uma música da fila de uma sala (via admin). Retorna true se existia.
+export async function removeTrackFromRoomQueue(roomId: string, trackId: string): Promise<boolean> {
+  const room = rooms.get(roomId);
+  const index = room ? room.queue.findIndex((t) => t.id === trackId) : -1;
+
+  if (index >= 0 && room) {
+    room.queue.splice(index, 1);
+    if (room.playback.currentTrackId === trackId) {
+      const next = room.queue[index];
+      room.playback = next
+        ? { status: 'playing', currentTrackId: next.id, timestamp: 0, updated_at: Date.now() }
+        : { status: 'paused', currentTrackId: null, timestamp: 0, updated_at: Date.now() };
+    }
+    scheduleSave();
+  }
+
+  await removeTrackFromSupabase(trackId);
+  return index >= 0;
+}
+
+// Serializa o estado atual das salas (mesmo formato do scheduleSave) para o
+// download de backup.
+export function serializeRoomsForBackup(): string {
+  const data: Record<string, any> = {};
+  for (const [id, room] of rooms.entries()) {
+    const roomCopy = { ...room };
+    delete (roomCopy as any).users;
+    data[id] = roomCopy;
+  }
+  return JSON.stringify(data, null, 2);
 }

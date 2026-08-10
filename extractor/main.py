@@ -5,12 +5,13 @@ import json
 import glob
 import logging
 import asyncio
+from collections import deque
 from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
 import yt_dlp
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Depends, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -80,6 +81,39 @@ MAX_CACHE_BYTES = 15 * 1024 * 1024 * 1024  # 15 GB
 
 if not os.path.exists(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+# ── Log ring buffer + token de admin ─────────────────────────────────────────
+# O backend (api) consulta /admin/logs e /extract/meta passando X-Admin-Token.
+# Mesmo valor vem de ${EXTRACTOR_ADMIN_TOKEN} no docker-compose.
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
+
+LOG_RING: deque = deque(maxlen=1000)
+
+
+class RingBufferHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            LOG_RING.append(
+                {
+                    "ts": int(record.created * 1000),
+                    "level": record.levelname.lower(),
+                    "msg": self.format(record),
+                }
+            )
+        except Exception:
+            pass
+
+
+logging.getLogger().addHandler(RingBufferHandler())
+
+
+def require_admin_token(x_admin_token: str = Header(default="")):
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+
+class MetaRequest(BaseModel):
+    url: str
 
 class ExtractRequest(BaseModel):
     url: str
@@ -227,6 +261,46 @@ def extract_with_ytdlp(url: str, video_id: str) -> dict:
         raise RuntimeError("Falha desconhecida ao extrair")
     raise last_error
 
+def extract_metadata(url: str, video_id: str) -> dict:
+    """Resolve apenas os metadados do vídeo via yt-dlp, sem baixar nada."""
+    opts = {
+        "skip_download": True,
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "extractor_args": {},
+    }
+    attempts = [
+        (None, True),
+        (("tv_embedded",), True),
+        (None, False),
+    ]
+    last_error: Optional[Exception] = None
+    for clients, use_pot in attempts:
+        try:
+            if clients:
+                opts["extractor_args"]["youtube"] = {"player_client": list(clients)}
+            if use_pot:
+                opts["extractor_args"]["youtubepot-bgutilhttp"] = {"base_url": [POT_BASE_URL]}
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                return {
+                    "id": info.get("id") or video_id,
+                    "titulo": info.get("title"),
+                    "thumbnail_url": info.get("thumbnail"),
+                    "duracao_seg": info.get("duration"),
+                    "is_live": info.get("is_live") or False,
+                    "uploader": info.get("uploader"),
+                }
+        except Exception as e:
+            last_error = e
+            code = classify_error(e)
+            if code not in ("bot_check", "forbidden", "unknown"):
+                raise
+    if last_error is None:
+        raise RuntimeError("Falha desconhecida ao extrair metadados")
+    raise last_error
+
 # ---------------------------------------------------------------------------
 # Fallbacks e Endpoints
 # ---------------------------------------------------------------------------
@@ -314,3 +388,25 @@ def extract_url(request: Request, req: ExtractRequest):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/admin/logs")
+@limiter.limit("30/minute")
+def admin_logs(request: Request, limit: int = 200, _: str = Depends(require_admin_token)):
+    return {"logs": list(LOG_RING)[-limit:]}
+
+@app.post("/extract/meta")
+@limiter.limit("10/minute")
+def extract_meta(request: Request, req: MetaRequest, _: str = Depends(require_admin_token)):
+    if not is_youtube_url(req.url):
+        return error_response("unsupported", ERROR_MESSAGES["unsupported"])
+
+    video_id = get_video_id(req.url)
+    if not video_id:
+        return error_response("unsupported", ERROR_MESSAGES["unsupported"])
+
+    try:
+        return extract_metadata(req.url, video_id)
+    except Exception as e:
+        code = classify_error(e)
+        logging.warning("Meta extraction falhou para %s (%s): %s", req.url, code, e)
+        return error_response(code, ERROR_MESSAGES.get(code, ERROR_MESSAGES["unknown"]))

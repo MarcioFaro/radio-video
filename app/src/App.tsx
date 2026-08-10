@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import Rooms from './pages/Rooms';
 import Room from './pages/Room';
 import Join from './pages/Join';
+import Admin from './pages/Admin';
 import { useUserStore } from './store/useUserStore';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -19,6 +20,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/join" element={<Join />} />
+        <Route path="/admin" element={<Admin />} />
         <Route 
           path="/rooms" 
           element={

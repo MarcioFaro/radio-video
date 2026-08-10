@@ -1,20 +1,12 @@
 import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
-import webpush from 'web-push';
+import { webpush } from './push';
 import { rooms, getOrCreateRoom, pickRadialista, removeUserFromRoom, pruneOldChatMessages, User, Track, Room, pushSubscriptions, syncUserToSupabase, supabase, loadRooms, scheduleSave, saveTrackToSupabase, updateTrackStatusInSupabase, updateTrackOrderInSupabase, removeTrackFromSupabase, addFavoriteRoom, removeFavoriteRoom, getUserFavorites } from './store';
+import { registerAdminRoutes } from './admin';
+import { recordActivity } from './activity';
 import { SEEDED_ROOM_ID, SEEDED_ROOM_NAME, SEEDED_ROOM_CODE, SEEDED_SONGS, SeedSong } from './seed';
-
-const vapidKeys = {
-  publicKey: 'BD29BGxbHjhrzUQrUHLiAaRJZDhr7fRP0F3PFtPGpCHLaGjEPKi-Ril1heXJwVOa_3GV-exRHHo4y8cROaaZGhY',
-  privateKey: '-oE_Pn-NNF6O38asWA_TOVEzPa4U4EsgM4iZ3aZz6gg'
-};
-
-webpush.setVapidDetails(
-  'mailto:contato@radiovideo.local',
-  vapidKeys.publicKey,
-  vapidKeys.privateKey
-);
+import './logger';
 
 const EXTRACTOR_URL = 'http://127.0.0.1:8000/extract';
 
@@ -241,6 +233,7 @@ io.on('connection', (socket) => {
     const newUser: User = { ...user, socket_id: socket.id, entrou_em: Date.now() };
     room.users.set(socket.id, newUser);
     syncUserToSupabase(user);
+    recordActivity('user_join', { actor: user.name, detail: `Entrou na sala ${roomName} (${roomId})` });
 
     // Se a sala estava vazia ou sem radialista, quem entrar ganha o controle
     if (!room.radialista_id || room.users.size === 1) {
@@ -285,6 +278,7 @@ io.on('connection', (socket) => {
       if (room.chat.length > 100) room.chat.shift();
       io.to(roomId).emit('chat_message', msg);
       scheduleSave();
+      recordActivity('chat_message', { actor: userName, detail: `Mensagem na sala ${room.name}` });
       
       // Envia Push Notification
       const senderId = Array.from(room.users.values()).find(u => u.socket_id === socket.id)?.id;
@@ -318,6 +312,7 @@ io.on('connection', (socket) => {
       
       // Salva no Supabase
       saveTrackToSupabase(data.roomId, newTrack).catch(console.error);
+      recordActivity('track_added', { actor: 'desconhecido', detail: `${newTrack.titulo} adicionada na sala ${room.name}` });
 
       // Envia Push Notification
       const senderId = Array.from(room.users.values()).find(u => u.socket_id === socket.id)?.id;
@@ -469,6 +464,7 @@ io.on('connection', (socket) => {
       const room = rooms.get(roomId);
       if (room) {
         const leaving = removeUserFromRoom(room, socket.id);
+        recordActivity('user_leave', { actor: leaving?.name, detail: `Saiu da sala ${roomId}` });
         io.to(roomId).emit('user_left', { socket_id: socket.id, users: Array.from(room.users.values()) });
 
         // Se o radialista saiu, transfere o papel para o membro mais antigo restante
@@ -490,6 +486,7 @@ io.on('connection', (socket) => {
       const room = rooms.get(roomId);
       if (room) {
         const leaving = removeUserFromRoom(room, socket.id);
+        recordActivity('user_leave', { actor: leaving?.name, detail: `Saiu da sala ${roomId}` });
         io.to(roomId).emit('user_left', { socket_id: socket.id, users: Array.from(room.users.values()) });
 
         // Se o radialista saiu, transfere o papel
@@ -552,6 +549,7 @@ setInterval(() => {
 
 const start = async () => {
   try {
+    registerAdminRoutes(fastify, io);
     loadRooms();
     await seedRooms();
     await fastify.listen({ port: 3005, host: '0.0.0.0' });

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useUserStore } from '../store/useUserStore';
-import { Radio } from 'lucide-react';
+import { Radio, ShieldCheck } from 'lucide-react';
 
 export default function Login() {
   const [name, setName] = useState(localStorage.getItem('lastUsername') || '');
@@ -62,6 +62,14 @@ export default function Login() {
             Entrar
           </button>
         </form>
+
+        <Link
+          to="/admin"
+          className="mt-6 flex items-center justify-center gap-1.5 text-xs text-gray-600 hover:text-gray-400 transition-colors"
+        >
+          <ShieldCheck size={14} />
+          Central de Admin
+        </Link>
       </div>
     </div>
   );

@@ -25,11 +25,16 @@ services:
       - "3005:3005"
     volumes:
       - api_data:/app/data
+      - downloads:/downloads
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-    
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - EXTRACTOR_ADMIN_TOKEN=${EXTRACTOR_ADMIN_TOKEN}
+      - DOWNLOADS_DIR=/downloads
+      - EXTRACTOR_BASE=http://extractor:8000
+
   extractor:
     build:
       context: ./extractor
@@ -38,6 +43,8 @@ services:
       - "8000:8000"
     volumes:
       - downloads:/app/downloads
+    environment:
+      - ADMIN_TOKEN=${EXTRACTOR_ADMIN_TOKEN}
 
 volumes:
   caddy_data:

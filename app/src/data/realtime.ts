@@ -27,6 +27,7 @@ interface RoomMeta {
 
 const metaByRoom = new Map<string, RoomMeta>();
 const listenersByRoom = new Map<string, Set<() => void>>();
+const roomEventListeners = new Set<(ev: { type: 'room_closed' | 'room_updated'; payload: any }) => void>();
 
 let currentRoomId: string | null = null;
 let wired = false;
@@ -108,6 +109,32 @@ function wireSocket(): void {
     presenceData.applyPresence(currentRoomId, data.users, presenceData.getRadialista(currentRoomId));
     notifyRoom(currentRoomId);
   });
+
+  socket.on('room_closed', (payload: any) => {
+    roomEventListeners.forEach((cb) => cb({ type: 'room_closed', payload }));
+  });
+
+  socket.on('room_updated', (payload: { name?: string; codigo_convite?: string }) => {
+    if (currentRoomId) {
+      const prev = metaByRoom.get(currentRoomId);
+      metaByRoom.set(currentRoomId, {
+        name: payload.name ?? prev?.name ?? null,
+        codigo_convite: payload.codigo_convite ?? prev?.codigo_convite ?? null,
+      });
+      notifyRoom(currentRoomId);
+    }
+    roomEventListeners.forEach((cb) => cb({ type: 'room_updated', payload }));
+  });
+}
+
+export function subscribeRoomEvents(
+  cb: (ev: { type: 'room_closed' | 'room_updated'; payload: any }) => void
+): () => void {
+  wireSocket();
+  roomEventListeners.add(cb);
+  return () => {
+    roomEventListeners.delete(cb);
+  };
 }
 
 export function ensureConnected(timeoutMs = 1500): Promise<boolean> {
