@@ -20,6 +20,7 @@ import {
   X,
   AlertTriangle,
   ArrowLeft,
+  Eraser,
 } from 'lucide-react';
 import {
   adminApi,
@@ -354,6 +355,18 @@ export default function Admin() {
   const loadMedia = useCallback(() => run(async () => {
     setMedia(await adminApi.media());
   }), [run]);
+
+  // Remove da biblioteca faixas cujos arquivos já foram apagados na VM (ex.:
+  // vídeos excluídos pela aba Mídias antes de essa regra existir).
+  const handlePruneLibrary = () => run(async () => {
+    const res = await adminApi.pruneLibrary();
+    await Promise.all([loadMedia(), loadBanco()]);
+    showToast(
+      res.removed > 0
+        ? `${res.removed} faixa(s) sem arquivo removida(s) da biblioteca.`
+        : 'Nenhuma faixa órfã encontrada.'
+    );
+  });
 
   const loadLogs = useCallback(() => run(async () => {
     const [api, ex] = await Promise.all([
@@ -900,9 +913,14 @@ export default function Admin() {
               title="Arquivos na VM"
               subtitle="Lista de /downloads — clique no lixo para excluir"
               actions={
-                <Btn onClick={loadMedia}>
-                  <RefreshCw size={15} /> Atualizar
-                </Btn>
+                <>
+                  <Btn onClick={handlePruneLibrary}>
+                    <Eraser size={15} /> Limpar faixas sem arquivo
+                  </Btn>
+                  <Btn onClick={loadMedia}>
+                    <RefreshCw size={15} /> Atualizar
+                  </Btn>
+                </>
               }
             >
               <div className="max-h-96 overflow-y-auto">
@@ -933,7 +951,7 @@ export default function Admin() {
                         onClick={() =>
                           openConfirm(
                             'Excluir arquivo',
-                            `Apagar "${f.title || f.name}" do disco? Se estiver em uso, o player quebrará para quem estiver tocando.`,
+                            `Apagar "${f.title || f.name}" do disco? Se for o último arquivo do vídeo, a faixa também sairá da biblioteca. Se estiver em uso, o player quebrará para quem estiver tocando.`,
                             async () => {
                               await adminApi.deleteMedia(f.name);
                               setMedia((prev) =>

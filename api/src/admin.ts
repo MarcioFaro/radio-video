@@ -552,9 +552,62 @@ export function registerAdminRoutes(fastify: FastifyInstance, io: Server) {
     if (!confirm) {
       return reply.status(400).send({ error: { code: 'confirm_required', message: 'É preciso enviar confirm: true.' } });
     }
-    const existed = await deleteLibraryTrackByYoutubeId(youtubeId);
+    const { existed, affectedRooms } = await deleteLibraryTrackByYoutubeId(youtubeId);
+    for (const rid of affectedRooms) {
+      const room = rooms.get(rid);
+      if (room) {
+        io.to(rid).emit('queue_updated', room.queue);
+        io.to(rid).emit('playback_updated', room.playback);
+      }
+    }
     recordActivity('admin_action', { actor: 'admin', detail: `Faixa excluída da biblioteca: ${youtubeId}` });
     return { status: 'ok', existed };
+  });
+
+  // Remove da biblioteca faixas que não têm mais nenhum arquivo de mídia em
+  // disco (ex.: vídeos apagados pela aba Mídias antes desta regra existir).
+  fastify.post('/admin/library/prune', { preHandler: requireAdmin }, async () => {
+    if (!supabase) return { removed: 0, removedTitles: [] };
+    const { data, error } = await supabase.from('tracks_library').select('youtube_id, titulo');
+    if (error) return { removed: 0, removedTitles: [] };
+
+    let names: string[] | null = null;
+    try {
+      names = fs.readdirSync(DOWNLOADS_DIR);
+    } catch {
+      names = null;
+    }
+    // Sem a lista de arquivos não dá para confirmar se a faixa é órfã — não
+    // apaga nada nesse caso (evita varrer a biblioteca por engano).
+    if (!names) return { removed: 0, removedTitles: [] };
+
+    const presentIds = new Set<string>();
+    for (const f of names) {
+      if (f.endsWith('.info.json')) continue;
+      const m = f.match(/^([A-Za-z0-9_-]{11})/);
+      if (m) presentIds.add(m[1]);
+    }
+
+    const removedTitles: string[] = [];
+    let removedCount = 0;
+    for (const row of (data || [])) {
+      const youtubeId = row.youtube_id;
+      if (!youtubeId || presentIds.has(youtubeId)) continue;
+      const { existed, affectedRooms } = await deleteLibraryTrackByYoutubeId(youtubeId);
+      if (existed) {
+        removedCount += 1;
+        if (row.titulo) removedTitles.push(row.titulo);
+        for (const rid of affectedRooms) {
+          const room = rooms.get(rid);
+          if (room) {
+            io.to(rid).emit('queue_updated', room.queue);
+            io.to(rid).emit('playback_updated', room.playback);
+          }
+        }
+      }
+    }
+    recordActivity('admin_action', { actor: 'admin', detail: `Biblioteca limpa: ${removedCount} faixa(s) sem arquivo removida(s)` });
+    return { removed: removedCount, removedTitles };
   });
 
   fastify.get('/admin/users', { preHandler: requireAdmin }, async () => listUsers());
@@ -711,8 +764,35 @@ export function registerAdminRoutes(fastify: FastifyInstance, io: Server) {
         /* segue mesmo se o .info.json não for apagado */
       }
     }
-    recordActivity('admin_action', { actor: 'admin', detail: `Mídia excluída: ${safe}` });
-    return { status: 'ok' };
+
+    // Se não restar nenhum arquivo de mídia do vídeo no disco, remove a faixa
+    // da biblioteca e das filas — senão ela continua aparecendo no app para ser
+    // adicionada, mas apontando para um arquivo que já não existe.
+    let removedFromLibrary = false;
+    const idMatch = safe.match(/^([A-Za-z0-9_-]{11})/);
+    if (idMatch) {
+      const youtubeId = idMatch[1];
+      let remaining: string[] = [];
+      try {
+        remaining = fs.readdirSync(DOWNLOADS_DIR)
+          .filter((f) => f !== safe && f.startsWith(youtubeId) && !f.endsWith('.info.json'));
+      } catch {
+        /* se não der para listar, considera que não sobrou nada */
+      }
+      if (remaining.length === 0) {
+        const { existed, affectedRooms } = await deleteLibraryTrackByYoutubeId(youtubeId);
+        removedFromLibrary = existed;
+        for (const rid of affectedRooms) {
+          const room = rooms.get(rid);
+          if (room) {
+            io.to(rid).emit('queue_updated', room.queue);
+            io.to(rid).emit('playback_updated', room.playback);
+          }
+        }
+      }
+    }
+    recordActivity('admin_action', { actor: 'admin', detail: `Mídia excluída: ${safe}${removedFromLibrary ? ' (também removida da biblioteca)' : ''}` });
+    return { status: 'ok', removedFromLibrary };
   });
 
   fastify.get('/admin/logs', { preHandler: requireAdmin }, async (request) => {

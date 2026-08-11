@@ -229,6 +229,7 @@ export const adminApi = {
     request(`/library/${encodeURIComponent(youtubeId)}`, { method: 'PUT', body: patch }),
   deleteTrack: (youtubeId: string) =>
     request(`/library/${encodeURIComponent(youtubeId)}`, { method: 'DELETE', body: { confirm: true } }),
+  pruneLibrary: () => request<{ removed: number; removedTitles: string[] }>('/library/prune', { method: 'POST' }),
   users: () => request<{ users: AdminUser[] }>('/users'),
   deleteUser: (id: string) => request(`/users/${encodeURIComponent(id)}`, { method: 'DELETE', body: { confirm: true } }),
   pushSubscriptions: () => request<{ subscriptions: PushSub[]; inMemory: number }>('/push-subscriptions'),

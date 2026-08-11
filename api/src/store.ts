@@ -424,8 +424,9 @@ export async function deleteUserCompletely(userId: string): Promise<boolean> {
 }
 
 // Exclui uma faixa da biblioteca e todas as referências em filas (Supabase +
-// memória). Retorna true se a faixa existia na biblioteca.
-export async function deleteLibraryTrackByYoutubeId(youtubeId: string): Promise<boolean> {
+// memória). Retorna se a faixa existia e quais salas tiveram fila/histórico
+// alterados (para o chamador avisar os clientes conectados).
+export async function deleteLibraryTrackByYoutubeId(youtubeId: string): Promise<{ existed: boolean; affectedRooms: string[] }> {
   let existed = false;
   if (supabase) {
     const lib = await supabase.from('tracks_library').select('youtube_id').eq('youtube_id', youtubeId).maybeSingle();
@@ -435,12 +436,15 @@ export async function deleteLibraryTrackByYoutubeId(youtubeId: string): Promise<
     const t = await supabase.from('tracks_library').delete().eq('youtube_id', youtubeId);
     if (t.error) console.error('[Supabase] Erro ao excluir faixa da biblioteca:', t.error.message);
   }
+  const affectedRooms: string[] = [];
   for (const room of rooms.values()) {
+    const before = room.queue.length + room.history.length;
     room.queue = room.queue.filter((tr) => tr.youtube_video_id !== youtubeId);
     room.history = room.history.filter((tr) => tr.youtube_video_id !== youtubeId);
+    if (room.queue.length + room.history.length !== before) affectedRooms.push(room.id);
   }
   scheduleSave();
-  return existed;
+  return { existed, affectedRooms };
 }
 
 export async function updateLibraryTrack(youtubeId: string, patch: { titulo?: string; duracao_seg?: number }) {
