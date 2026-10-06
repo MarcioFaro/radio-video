@@ -232,6 +232,10 @@ def extract_with_ytdlp(url: str, video_id: str, quality: str = "360p") -> dict:
                 info = json.load(f)
             
             ext = info.get("ext", "mp4")
+            # Download que falhou no meio deixa o .info.json sem a midia; sem
+            # esta checagem a faixa ficava "em cache" apontando para um 404.
+            if not os.path.exists(os.path.join(DOWNLOADS_DIR, f"{video_id}{suffix}.{ext}")):
+                raise FileNotFoundError(f"midia ausente para {video_id}{suffix}.{ext}")
             local_url = f"{MEDIA_BASE_URL}/{video_id}{suffix}.{ext}"
             info["url"] = local_url
             
