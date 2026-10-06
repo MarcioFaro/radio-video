@@ -30,5 +30,8 @@ jobs:
             grep -q '^ADMIN_USERNAME=' .env 2>/dev/null || echo "ADMIN_USERNAME=$ADMIN_USERNAME" >> .env
             grep -q '^ADMIN_PASSWORD=' .env 2>/dev/null || echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> .env
             grep -q '^EXTRACTOR_ADMIN_TOKEN=' .env 2>/dev/null || echo "EXTRACTOR_ADMIN_TOKEN=$EXTRACTOR_ADMIN_TOKEN" >> .env
+            # Constroi antes de derrubar: o Caddy e compartilhado com outros sites
+            # e assim eles ficam fora do ar so durante a troca dos containers.
+            sudo docker-compose build
             sudo docker-compose down
-            sudo docker-compose up -d --build
+            sudo docker-compose up -d
