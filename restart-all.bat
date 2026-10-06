@@ -3,6 +3,8 @@ setlocal
 
 set "ROOT=%~dp0"
 set "DOCKER_DESKTOP=C:\Program Files\Docker\Docker\Docker Desktop.exe"
+REM  Instalacao por usuario (sem admin) fica em LOCALAPPDATA
+if not exist "%DOCKER_DESKTOP%" set "DOCKER_DESKTOP=%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe"
 set "API_PORT=3005"
 set "APP_PORT=5173"
 
@@ -57,7 +59,11 @@ docker build -t radio-extractor "%ROOT%extractor"
 if errorlevel 1 goto :build_failed
 
 echo [2/4] Extractor - iniciando container na porta 8000...
-docker run -d --name radio-extractor -p 8000:8000 --restart unless-stopped radio-extractor
+REM  Local nao ha Caddy: o extrator serve /media e grava na pasta que a API le.
+set "EXTRACTOR_TOKEN="
+if exist "%ROOT%api\.env" for /f "usebackq tokens=1,* delims==" %%a in ("%ROOT%api\.env") do if /i "%%a"=="EXTRACTOR_ADMIN_TOKEN" set "EXTRACTOR_TOKEN=%%b"
+if not exist "%ROOT%api\downloads" mkdir "%ROOT%api\downloads"
+docker run -d --name radio-extractor -p 8000:8000 --restart unless-stopped -e MEDIA_BASE_URL=http://127.0.0.1:8000/media -e "ADMIN_TOKEN=%EXTRACTOR_TOKEN%" -v "%ROOT%api\downloads:/app/downloads" radio-extractor
 if errorlevel 1 goto :run_failed
 echo       Extractor rodando em http://localhost:8000
 goto :api_step

@@ -14,6 +14,7 @@ import yt_dlp
 from fastapi import FastAPI, Depends, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
@@ -81,6 +82,12 @@ MAX_CACHE_BYTES = 15 * 1024 * 1024 * 1024  # 15 GB
 
 if not os.path.exists(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+# Endereco publico dos arquivos baixados. Em producao quem serve /media e o
+# Caddy; rodando local (restart-all.bat) nao ha Caddy, entao o proprio extrator
+# serve a pasta em /media e o .bat aponta MEDIA_BASE_URL para ele.
+MEDIA_BASE_URL = os.environ.get("MEDIA_BASE_URL", "https://comunaradio.duckdns.org/media").rstrip("/")
+app.mount("/media", StaticFiles(directory=DOWNLOADS_DIR), name="media")
 
 # ── Log ring buffer + token de admin ─────────────────────────────────────────
 # O backend (api) consulta /admin/logs e /extract/meta passando X-Admin-Token.
@@ -225,7 +232,7 @@ def extract_with_ytdlp(url: str, video_id: str, quality: str = "360p") -> dict:
                 info = json.load(f)
             
             ext = info.get("ext", "mp4")
-            local_url = f"https://comunaradio.duckdns.org/media/{video_id}{suffix}.{ext}"
+            local_url = f"{MEDIA_BASE_URL}/{video_id}{suffix}.{ext}"
             info["url"] = local_url
             
             # Toca no atime de todos os arquivos relacionados para o LRU não apagar
@@ -264,7 +271,7 @@ def extract_with_ytdlp(url: str, video_id: str, quality: str = "360p") -> dict:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 ext = info.get("ext", "mp4")
-                info["url"] = f"https://comunaradio.duckdns.org/media/{info['id']}{suffix}.{ext}"
+                info["url"] = f"{MEDIA_BASE_URL}/{info['id']}{suffix}.{ext}"
                 return info
         except Exception as e:
             last_error = e

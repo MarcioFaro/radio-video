@@ -7,3 +7,5 @@ __pycache__/
 venv/
 github-deploy-key
 github-deploy-key.pub
+api/data/
+api/downloads/
