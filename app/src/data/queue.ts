@@ -64,7 +64,9 @@ export async function previewTrack(url: string, quality: string = '360p'): Promi
   let res: Response;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
+    // O extrator so responde depois de baixar a midia inteira; um show de 1h30
+    // leva bem mais que alguns segundos.
+    const timer = setTimeout(() => controller.abort(), 120000);
     res = await fetch(EXTRACTOR_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
