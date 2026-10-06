@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 pydantic
-yt-dlp
+yt-dlp>=2026.8.19
 bgutil-ytdlp-pot-provider
 httpx
 slowapi
