@@ -4,5 +4,16 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self' https://pibohub.duckdns.org http://localhost:4000"
+        }
+      ]
+    }
   ]
 }
