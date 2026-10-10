@@ -130,9 +130,21 @@ class ExtractRequest(BaseModel):
 # sufixo de arquivo; 360p usa os nomes legados ({id}.mp4) pra nao quebrar os
 # arquivos ja baixados. 144p e audio usam sufixo ({id}.144.mp4, {id}.audio.m4a)
 # pra coexistirem em disco sem sobrescrever uns aos outros.
+#
+# O YouTube nao entrega mais arquivo unico com video+audio, entao pedimos os
+# dois separados e o yt-dlp junta com ffmpeg (so reempacota, sem recodificar).
+# H.264 + AAC primeiro porque toca em qualquer navegador; o fim da cadeia cai
+# para so audio se o video falhar.
+def _video_format(height: int) -> str:
+    return (
+        f"bestvideo[height<={height}][vcodec^=avc1]+bestaudio[ext=m4a]"
+        f"/bestvideo[height<={height}]+bestaudio"
+        f"/best[height<={height}]/bestaudio/best"
+    )
+
 QUALITY_OPTS = {
-    "360p": {"format": "best[height<=360]/bestaudio/best", "suffix": ""},
-    "144p": {"format": "best[height<=144]/bestaudio/best", "suffix": ".144"},
+    "360p": {"format": _video_format(360), "suffix": ""},
+    "144p": {"format": _video_format(144), "suffix": ".144"},
     "audio": {"format": "bestaudio/best", "suffix": ".audio"},
 }
 
@@ -232,6 +244,10 @@ def extract_with_ytdlp(url: str, video_id: str, quality: str = "360p") -> dict:
                 info = json.load(f)
             
             ext = info.get("ext", "mp4")
+            # Cache antigo de uma qualidade com video que veio so com audio
+            # (antes do ffmpeg): baixa de novo, agora com video.
+            if quality != "audio" and info.get("vcodec") == "none":
+                raise ValueError(f"cache de {video_id}{suffix} esta sem video")
             # Download que falhou no meio deixa o .info.json sem a midia; sem
             # esta checagem a faixa ficava "em cache" apontando para um 404.
             if not os.path.exists(os.path.join(DOWNLOADS_DIR, f"{video_id}{suffix}.{ext}")):
@@ -252,6 +268,7 @@ def extract_with_ytdlp(url: str, video_id: str, quality: str = "360p") -> dict:
     opts = {
         "format": opts_q["format"],
         "outtmpl": os.path.join(DOWNLOADS_DIR, f"%(id)s{suffix}.%(ext)s"),
+        "merge_output_format": "mp4",
         "writeinfojson": True,
         "quiet": True,
         "no_warnings": True,

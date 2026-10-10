@@ -44,6 +44,7 @@ export default function Room() {
   const [pipActive, setPipActive] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [hasVideo, setHasVideo] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
@@ -253,7 +254,11 @@ export default function Room() {
         }
       }
     };
-    const onMeta = () => setDuration(el.duration || 0);
+    const onMeta = () => {
+      setDuration(el.duration || 0);
+      // Faixas antigas foram baixadas so com audio: sem imagem para mostrar.
+      if (el.readyState >= HTMLMediaElement.HAVE_METADATA) setHasVideo(el.videoWidth > 0);
+    };
     el.addEventListener('timeupdate', onTime);
     el.addEventListener('loadedmetadata', onMeta);
     el.addEventListener('durationchange', onMeta);
@@ -764,14 +769,20 @@ export default function Room() {
                 
                 <video
                   ref={videoRef}
-                  className={`w-full h-full object-contain z-10 ${showVideo ? 'relative' : 'absolute opacity-0 pointer-events-none'}`}
+                  className={`w-full h-full object-contain z-10 ${showVideo && hasVideo ? 'relative' : 'absolute opacity-0 pointer-events-none'}`}
                   playsInline
                   muted={isMuted}
                   onEnded={handleTrackEnded}
                 />
 
-                {!showVideo && (
+                {!(showVideo && hasVideo) && (
                   <img src={currentTrack.thumbnail_url} alt="Cover" className="relative h-full object-contain z-10 shadow-2xl rounded-lg" />
+                )}
+
+                {showVideo && !hasVideo && (
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-black/70 text-gray-200 text-xs px-3 py-1.5 rounded-full whitespace-nowrap">
+                    Esta faixa foi baixada só com áudio
+                  </div>
                 )}
 
                 {/* Overlay de Bloqueio de Autoplay (Celular) */}
