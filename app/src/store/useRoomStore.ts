@@ -34,6 +34,7 @@ interface RoomState {
   seekTo: (timestamp: number) => void;
   simulateRadialistaChange: () => void;
   trackEnded: (trackId: string) => void;
+  advanceLocally: (nextTrackId: string) => void;
 }
 
 let unsubscribeRoom: (() => void) | null = null;
@@ -185,12 +186,25 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     }
   },
 
+  // Sem checar 'connected': se o socket estiver caido, o socket.io guarda o
+  // aviso e entrega ao reconectar. O servidor so avanca se a faixa ainda for
+  // a atual, entao um aviso atrasado nao pula musica.
   trackEnded: (trackId) => {
-    const { roomId, connected } = get();
+    const { roomId } = get();
     if (!roomId) return;
-    if (connected) {
-      realtime.trackEnded(roomId, trackId);
-    }
+    realtime.trackEnded(roomId, trackId);
+  },
+
+  advanceLocally: (nextTrackId) => {
+    const { roomId } = get();
+    if (!roomId) return;
+    playbackData.applyPlayback(roomId, {
+      status: 'playing',
+      currentTrackId: nextTrackId,
+      timestamp: 0,
+      updated_at: realtime.getServerTime(),
+    });
+    set({ playback: { ...playbackData.getPlayback(roomId) } });
   },
 
   seekTo: (timestamp) => {

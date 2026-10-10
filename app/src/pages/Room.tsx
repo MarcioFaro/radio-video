@@ -33,7 +33,7 @@ export default function Room() {
   
   const { 
     roomName, queue, presence, chat, playback, radialista_id, connected,
-    joinRoom, leaveRoom, setPlaybackStatus, sendMessage, moveTrack, removeTrack, seekTo, trackEnded
+    joinRoom, leaveRoom, setPlaybackStatus, sendMessage, moveTrack, removeTrack, seekTo, trackEnded, advanceLocally
   } = useRoomStore();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -357,6 +357,9 @@ export default function Room() {
       }
     };
     const handleNativePause = () => {
+      // O navegador tambem dispara 'pause' ao chegar no fim da midia; isso
+      // nao e' um pause do usuario e nao deve pausar a sala.
+      if (el.ended) return;
       if (playback.status === 'playing') {
         setPlaybackStatus('paused', currentTrack.id, el.currentTime);
       }
@@ -498,10 +501,27 @@ export default function Room() {
     setDragging(false);
   };
 
+  // Comeca a proxima faixa aqui mesmo, sem esperar o servidor responder: com
+  // a tela do celular apagada, o navegador pode suspender a pagina (ou a
+  // rede) assim que o som para, e a resposta so chegaria ao acender a tela.
+  // A regra da proxima faixa e' a mesma do servidor (volta pra primeira).
   const handleTrackEnded = () => {
-    if (isRadialista && currentTrack) {
-      trackEnded(currentTrack.id);
+    if (!currentTrack) return;
+    const index = queue.findIndex(t => t.id === currentTrack.id);
+    const nextTrack = queue[index + 1] || queue[0];
+    const el = getActiveEl();
+    if (el && nextTrack && !previewMode) {
+      const nextSrc = showVideo && nextTrack.video_url ? nextTrack.video_url : nextTrack.audio_url;
+      if (nextSrc) {
+        if (el.src !== nextSrc) el.src = nextSrc;
+        el.play().then(() => setAutoplayBlocked(false)).catch(e => {
+          console.log('Autoplay blocked:', e);
+          setAutoplayBlocked(true);
+        });
+        advanceLocally(nextTrack.id);
+      }
     }
+    if (isRadialista) trackEnded(currentTrack.id);
   };
 
   const handleToggleVideo = () => {
