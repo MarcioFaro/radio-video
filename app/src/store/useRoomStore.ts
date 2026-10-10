@@ -87,6 +87,11 @@ export const useRoomStore = create<RoomState>((set, get) => ({
           ...readRoom(roomId),
         });
       } else {
+        // Ainda sem conexao: deixa a entrada registrada para acontecer
+        // assim que o socket conectar.
+        unsubscribeRoom?.();
+        unsubscribeRoom = realtime.subscribeRoom(roomId, () => set(readRoom(roomId)));
+        realtime.joinRoom(roomId, roomName, user);
         presenceData.join(roomId, user);
         set({
           roomId,

@@ -30,6 +30,8 @@ const listenersByRoom = new Map<string, Set<() => void>>();
 const roomEventListeners = new Set<(ev: { type: 'room_closed' | 'room_updated' | 'room_deleted'; payload: any }) => void>();
 
 let currentRoomId: string | null = null;
+// Dados da entrada na sala atual, guardados para reentrar a cada reconexao.
+let currentJoin: { roomId: string; roomName: string; user: User } | null = null;
 let wired = false;
 let serverTimeOffset = 0;
 
@@ -55,6 +57,13 @@ function applyServerState(roomId: string, state: ServerRoomState): void {
 function wireSocket(): void {
   if (wired) return;
   wired = true;
+
+  // A cada (re)conexao o socket ganha outro id e o servidor ja tirou o
+  // usuario da sala. Sem reentrar, o site mostra "sinc" mas nao recebe mais
+  // nada da sala -- a musica termina e a proxima nunca comeca.
+  socket.on('connect', () => {
+    if (currentJoin) socket.emit('join_room', currentJoin);
+  });
 
   socket.on('sync_state', (data: { room: ServerRoomState }) => {
     if (data.room.id === currentRoomId) {
@@ -213,11 +222,15 @@ export function getRoomMeta(roomId: string): RoomMeta {
 export function joinRoom(roomId: string, roomName: string, user: User): void {
   wireSocket();
   currentRoomId = roomId;
-  socket.emit('join_room', { roomId, roomName, user });
+  currentJoin = { roomId, roomName, user };
+  // Desconectado, quem entra e' o handler de 'connect' (emitir aqui ficaria
+  // no buffer do socket.io e entraria duas vezes).
+  if (socket.connected) socket.emit('join_room', currentJoin);
 }
 
 export function leaveRoom(roomId: string): void {
   currentRoomId = null;
+  currentJoin = null;
   socket.emit('leave_room', { roomId });
 }
 
